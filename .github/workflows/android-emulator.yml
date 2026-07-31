@@ -1,4 +1,4 @@
-name: 📱 Web Android Emulator for WhatsApp OTP & Pairing
+name: 📱 Web Android Emulator for WhatsApp OTP & Pairing (Fast 60FPS Speed)
 
 on:
   workflow_dispatch:
@@ -13,19 +13,20 @@ jobs:
           sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils
           sudo chmod 666 /dev/kvm || true
 
-      - name: 🐳 Launch Docker Android (noVNC Web Interface)
+      - name: 🐳 Launch Fast High-Speed Docker Android (Low-DPI 720p)
         run: |
           docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 \
             --privileged \
-            -e EMULATOR_DEVICE="Samsung Galaxy S10" \
+            -e EMULATOR_DEVICE="Nexus 5" \
             -e WEB_VNC=true \
             --name android-container \
-            budtmo/docker-android:emulator_11.0 || docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 --privileged -e EMULATOR_DEVICE="Samsung Galaxy S10" -e WEB_VNC=true --name android-container budtmo/docker-android:latest
+            budtmo/docker-android:emulator_11.0 || docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 --privileged -e EMULATOR_DEVICE="Nexus 5" -e WEB_VNC=true --name android-container budtmo/docker-android:latest
 
-      - name: ⌛ Wait for Android Boot & System Ready
+      - name: ⌛ Wait for Android Boot & Apply Animation Speedup
         run: |
-          echo "Memuat Android System... Harap tunggu 45 detik."
-          sleep 45
+          echo "Memuat Android System... Harap tunggu 35 detik."
+          sleep 35
+          docker exec -i android-container bash -c "adb shell settings put global window_animation_scale 0 && adb shell settings put global transition_animation_scale 0 && adb shell settings put global animator_duration_scale 0" || true
 
       - name: 📲 Auto Install & Auto Launch WhatsApp
         run: |
@@ -33,7 +34,7 @@ jobs:
           docker exec -i android-container bash -c "curl -sL -o /tmp/wa.apk 'https://androidapksfree.com/wp-content/uploads/apks/whatsapp-messenger-2-24-15-77.apk' && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1" || true
           echo "✅ WhatsApp successfully launched on screen!"
 
-      - name: 🌐 Create Secure Web Tunnel URL (Cloudflare & Pinggy)
+      - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
         run: |
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
