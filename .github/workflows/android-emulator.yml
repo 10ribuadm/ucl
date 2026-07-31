@@ -1,4 +1,4 @@
-﻿name: 📱 Web Android Emulator for WhatsApp OTP & Pairing
+name: 📱 Web Android Emulator for WhatsApp OTP & Pairing
 
 on:
   workflow_dispatch:
@@ -20,11 +20,11 @@ jobs:
             -e EMULATOR_DEVICE="Samsung Galaxy S10" \
             -e WEB_VNC=true \
             --name android-container \
-            budtmo/docker-android:x86-11.0
+            budtmo/docker-android:emulator_11.0 || docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 --privileged -e EMULATOR_DEVICE="Samsung Galaxy S10" -e WEB_VNC=true --name android-container budtmo/docker-android:latest
 
       - name: ⌛ Wait for Android Boot
         run: |
-          echo "Memuat Android System... Harap tunggu 30-45 detik."
+          echo "Memuat Android System... Harap tunggu 45 detik."
           sleep 45
 
       - name: 🌐 Create Secure Cloudflare Web Tunnel URL
