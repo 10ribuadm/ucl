@@ -92,7 +92,7 @@
     </div>
 
     <div class="controls">
-      <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Tempel URL Cloudflare Tunnel (contoh: https://xxxx.trycloudflare.com)...">
+      <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Tempel URL Tunnel (contoh: https://lemon-apes-dress.loca.lt atau https://xxxx.trycloudflare.com)...">
       <button class="btn btn-primary" onclick="connectEmulator()">🚀 Connect Layar Fullscreen</button>
       <button class="btn btn-secondary" onclick="toggleBrowserFullscreen()">🖥️ Toggle Fullscreen Browser</button>
       <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-secondary">⚡ Run Actions</a>
@@ -104,7 +104,7 @@
       <span class="status-badge">⚡ WAITING FOR EMULATOR TUNNEL</span>
       <h2 style="font-size: 22px; margin-bottom: 12px;">📱 Web Android Control Hub</h2>
       <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
-        Tempelkan <b>URL Cloudflare Tunnel</b> dari log GitHub Actions di atas lalu klik <b>Connect Layar Fullscreen</b> untuk mengontrol HP Android tanpa scrollbar!
+        Tempelkan <b>URL Tunnel terbaru</b> dari log GitHub Actions di atas lalu klik <b>Connect Layar Fullscreen</b> untuk mengontrol HP Android!
       </p>
       <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
         <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-primary">⚡ 1. Buka & Run GitHub Actions</a>
@@ -119,7 +119,7 @@
       let url = input.value.trim();
 
       if (!url) {
-        alert('Masukkan URL Cloudflare Tunnel terlebih dahulu!');
+        alert('Masukkan URL Tunnel terlebih dahulu!');
         return;
       }
 
@@ -127,11 +127,11 @@
         url = 'https://' + url;
       }
 
-      // Auto-append noVNC auto-scaling parameters if missing
-      if (!url.includes('/app/ui.html') && !url.includes('/vnc.html')) {
+      // Handle localtunnel / pinggy vs cloudflare pathing to prevent 404
+      if (url.includes('.loca.lt') || url.includes('pinggy') || url.includes('ngrok')) {
+        // Keep root URL clean for localtunnel / pinggy / ngrok
+      } else if (!url.includes('/app/ui.html') && !url.includes('/vnc.html')) {
         url = url.replace(/\/$/, '') + '/app/ui.html?autoconnect=true&resize=scale';
-      } else if (!url.includes('resize=scale')) {
-        url += (url.includes('?') ? '&' : '?') + 'resize=scale&autoconnect=true';
       }
 
       document.getElementById('placeholderBox').style.display = 'none';
