@@ -35,8 +35,8 @@ jobs:
           ls -lh /tmp/wa.apk || true
           echo "⚙️ Installing APK into Android Container..."
           docker cp /tmp/wa.apk android-container:/tmp/wa.apk || true
-          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1" || true
-          echo "✅ WhatsApp installation step complete!"
+          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1 && sleep 5 && adb shell input keyevent 4" || true
+          echo "✅ WhatsApp installation and auto-launch step complete!"
 
       - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
         run: |
