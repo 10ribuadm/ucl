@@ -24,8 +24,14 @@ jobs:
 
       - name: ⌛ Wait for Android Boot
         run: |
-          echo "Memuat Android System... Harap tunggu 45 detik."
-          sleep 45
+          echo "Memuat Android System... Harap tunggu 40 detik."
+          sleep 40
+
+      - name: 📲 Auto Download & Install WhatsApp APK
+        run: |
+          echo "📥 Auto-installing WhatsApp Official APK..."
+          docker exec -i android-container bash -c "wget -q -O /tmp/wa.apk 'https://androidapksfree.com/wp-content/uploads/apks/whatsapp-messenger-2-24-15-77.apk' && adb install -r /tmp/wa.apk" || true
+          echo "✅ WhatsApp pre-installed on Android!"
 
       - name: 🌐 Create Secure Cloudflare Web Tunnel URL
         run: |
