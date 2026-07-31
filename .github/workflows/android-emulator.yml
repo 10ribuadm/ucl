@@ -28,11 +28,11 @@ jobs:
           sleep 35
           docker exec -i android-container bash -c "adb shell settings put global window_animation_scale 0 && adb shell settings put global transition_animation_scale 0 && adb shell settings put global animator_duration_scale 0" || true
 
-      - name: 📲 Auto Install & Auto Launch WhatsApp
+      - name: 📲 Direct Download & Auto Install Official WhatsApp APK
         run: |
-          echo "📥 Auto-installing WhatsApp Official APK..."
-          docker exec -i android-container bash -c "curl -sL -o /tmp/wa.apk 'https://androidapksfree.com/wp-content/uploads/apks/whatsapp-messenger-2-24-15-77.apk' && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1" || true
-          echo "✅ WhatsApp successfully launched on screen!"
+          echo "📥 Downloading WhatsApp Official APK from whatsapp.com..."
+          docker exec -i android-container bash -c "curl -sL 'https://www.whatsapp.com/android/current/WhatsApp.apk' -o /tmp/wa.apk && ls -lh /tmp/wa.apk && adb install -g -r /tmp/wa.apk && adb shell am start -n com.whatsapp/.Main || adb shell monkey -p com.whatsapp 1"
+          echo "✅ WhatsApp successfully installed and launched!"
 
       - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
         run: |
