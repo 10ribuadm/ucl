@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📱 Android Remote Emulator - emu.hayuk.web.id</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #04070d;
+      --card-bg: #0b1329;
+      --primary: #10b981;
+      --accent: #38bdf8;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: var(--bg); color: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .brand { font-size: 18px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .brand span { color: var(--primary); }
+
+    .controls { display: flex; gap: 10px; align-items: center; flex: 1; max-width: 700px; }
+    .input-url {
+      flex: 1;
+      padding: 10px 14px;
+      background: #04070d;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #38bdf8;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-secondary { background: #1e293b; color: #fff; border: 1px solid #334155; }
+    .btn-secondary:hover { background: #334155; }
+
+    main { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+    iframe { width: 100%; height: 100%; border: none; }
+
+    .placeholder-box {
+      text-align: center;
+      padding: 40px 20px;
+      max-width: 540px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      📱 <span>emu.hayuk.web.id</span>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Tempel URL Cloudflare Tunnel (contoh: https://xxxx.trycloudflare.com)...">
+      <button class="btn btn-primary" onclick="connectEmulator()">🚀 Connect Layar Android</button>
+      <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-secondary">⚡ Run GitHub Actions</a>
+    </div>
+  </header>
+
+  <main id="mainContainer">
+    <div class="placeholder-box" id="placeholderBox">
+      <span class="status-badge">⚡ WAITING FOR EMULATOR TUNNEL</span>
+      <h2 style="font-size: 22px; margin-bottom: 12px;">📱 Web Android Control Hub</h2>
+      <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
+        Jalankan workflow di GitHub Actions, lalu tempelkan <b>URL Cloudflare Tunnel</b> di kolom atas dan klik <b>Connect Layar Android</b> untuk mengontrol layar HP langsung di sini!
+      </p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-primary">⚡ 1. Buka & Run GitHub Actions</a>
+        <button class="btn btn-secondary" onclick="demoMode()">🖥️ Demo Test Screen</button>
+      </div>
+    </div>
+    <iframe id="emulatorIframe" style="display: none;" src="about:blank"></iframe>
+  </main>
+
+  <script>
+    function connectEmulator() {
+      const url = document.getElementById('tunnelUrlInput').value.trim();
+      if (!url) {
+        alert('Masukkan URL Cloudflare Tunnel terlebih dahulu!');
+        return;
+      }
+
+      let formattedUrl = url;
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+
+      document.getElementById('placeholderBox').style.display = 'none';
+      const iframe = document.getElementById('emulatorIframe');
+      iframe.style.display = 'block';
+      iframe.src = formattedUrl;
+    }
+
+    function demoMode() {
+      alert('Tempelkan URL Cloudflare Tunnel dari log GitHub Actions kamu untuk menghubungkan layar Android secara live!');
+    }
+
+    // Auto-connect if URL parameter exists (?url=https://...)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramUrl = urlParams.get('url');
+    if (paramUrl) {
+      document.getElementById('tunnelUrlInput').value = paramUrl;
+      connectEmulator();
+    }
+  </script>
+</body>
+</html>
