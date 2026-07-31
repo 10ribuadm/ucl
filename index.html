@@ -14,25 +14,27 @@
       --border: rgba(255, 255, 255, 0.1);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-    body { background: var(--bg); color: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    html, body { height: 100%; width: 100%; overflow: hidden; background: var(--bg); color: #fff; display: flex; flex-direction: column; }
 
     header {
       background: var(--card-bg);
       border-bottom: 1px solid var(--border);
-      padding: 12px 24px;
+      padding: 10px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
+      z-index: 100;
+      flex-shrink: 0;
     }
-    .brand { font-size: 18px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .brand { font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
     .brand span { color: var(--primary); }
 
-    .controls { display: flex; gap: 10px; align-items: center; flex: 1; max-width: 700px; }
+    .controls { display: flex; gap: 10px; align-items: center; flex: 1; max-width: 800px; }
     .input-url {
       flex: 1;
-      padding: 10px 14px;
+      padding: 9px 14px;
       background: #04070d;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -41,7 +43,7 @@
       font-size: 13px;
     }
     .btn {
-      padding: 10px 18px;
+      padding: 9px 16px;
       border-radius: 8px;
       border: none;
       font-weight: 700;
@@ -51,14 +53,15 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      white-space: nowrap;
     }
     .btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
     .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
     .btn-secondary { background: #1e293b; color: #fff; border: 1px solid #334155; }
     .btn-secondary:hover { background: #334155; }
 
-    main { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
-    iframe { width: 100%; height: 100%; border: none; }
+    main { flex: 1; width: 100%; height: 100%; position: relative; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: none; outline: none; }
 
     .placeholder-box {
       text-align: center;
@@ -90,8 +93,9 @@
 
     <div class="controls">
       <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Tempel URL Cloudflare Tunnel (contoh: https://xxxx.trycloudflare.com)...">
-      <button class="btn btn-primary" onclick="connectEmulator()">🚀 Connect Layar Android</button>
-      <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-secondary">⚡ Run GitHub Actions</a>
+      <button class="btn btn-primary" onclick="connectEmulator()">🚀 Connect Layar Fullscreen</button>
+      <button class="btn btn-secondary" onclick="toggleBrowserFullscreen()">🖥️ Toggle Fullscreen Browser</button>
+      <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-secondary">⚡ Run Actions</a>
     </div>
   </header>
 
@@ -100,40 +104,53 @@
       <span class="status-badge">⚡ WAITING FOR EMULATOR TUNNEL</span>
       <h2 style="font-size: 22px; margin-bottom: 12px;">📱 Web Android Control Hub</h2>
       <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
-        Jalankan workflow di GitHub Actions, lalu tempelkan <b>URL Cloudflare Tunnel</b> di kolom atas dan klik <b>Connect Layar Android</b> untuk mengontrol layar HP langsung di sini!
+        Tempelkan <b>URL Cloudflare Tunnel</b> dari log GitHub Actions di atas lalu klik <b>Connect Layar Fullscreen</b> untuk mengontrol HP Android tanpa scrollbar!
       </p>
       <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
         <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-primary">⚡ 1. Buka & Run GitHub Actions</a>
-        <button class="btn btn-secondary" onclick="demoMode()">🖥️ Demo Test Screen</button>
       </div>
     </div>
-    <iframe id="emulatorIframe" style="display: none;" src="about:blank"></iframe>
+    <iframe id="emulatorIframe" style="display: none;" allow="fullscreen; clipboard-read; clipboard-write; autoplay; camera; microphone;" allowfullscreen="true" src="about:blank"></iframe>
   </main>
 
   <script>
     function connectEmulator() {
-      const url = document.getElementById('tunnelUrlInput').value.trim();
+      const input = document.getElementById('tunnelUrlInput');
+      let url = input.value.trim();
+
       if (!url) {
         alert('Masukkan URL Cloudflare Tunnel terlebih dahulu!');
         return;
       }
 
-      let formattedUrl = url;
-      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = 'https://' + formattedUrl;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Auto-append noVNC auto-scaling parameters if missing
+      if (!url.includes('/app/ui.html') && !url.includes('/vnc.html')) {
+        url = url.replace(/\/$/, '') + '/app/ui.html?autoconnect=true&resize=scale';
+      } else if (!url.includes('resize=scale')) {
+        url += (url.includes('?') ? '&' : '?') + 'resize=scale&autoconnect=true';
       }
 
       document.getElementById('placeholderBox').style.display = 'none';
       const iframe = document.getElementById('emulatorIframe');
       iframe.style.display = 'block';
-      iframe.src = formattedUrl;
+      iframe.src = url;
     }
 
-    function demoMode() {
-      alert('Tempelkan URL Cloudflare Tunnel dari log GitHub Actions kamu untuk menghubungkan layar Android secara live!');
+    function toggleBrowserFullscreen() {
+      const elem = document.documentElement;
+      if (!document.fullscreenElement) {
+        if (elem.requestFullscreen) elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
     }
 
-    // Auto-connect if URL parameter exists (?url=https://...)
+    // Auto-connect if URL parameter exists
     const urlParams = new URLSearchParams(window.location.search);
     const paramUrl = urlParams.get('url');
     if (paramUrl) {
