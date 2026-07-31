@@ -24,15 +24,19 @@ jobs:
 
       - name: ⌛ Wait for Android Boot & Apply Animation Speedup
         run: |
-          echo "Memuat Android System... Harap tunggu 35 detik."
-          sleep 35
+          echo "Memuat Android System... Harap tunggu 40 detik."
+          sleep 40
           docker exec -i android-container bash -c "adb shell settings put global window_animation_scale 0 && adb shell settings put global transition_animation_scale 0 && adb shell settings put global animator_duration_scale 0" || true
 
       - name: 📲 Direct Download & Auto Install Official WhatsApp APK
         run: |
-          echo "📥 Downloading WhatsApp Official APK from whatsapp.com..."
-          docker exec -i android-container bash -c "curl -sL 'https://www.whatsapp.com/android/current/WhatsApp.apk' -o /tmp/wa.apk && ls -lh /tmp/wa.apk && adb install -g -r /tmp/wa.apk && adb shell am start -n com.whatsapp/.Main || adb shell monkey -p com.whatsapp 1"
-          echo "✅ WhatsApp successfully installed and launched!"
+          echo "📥 Downloading WhatsApp Official APK..."
+          curl -sL -o /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || wget -q -O /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
+          ls -lh /tmp/wa.apk || true
+          echo "⚙️ Installing APK into Android Container..."
+          docker cp /tmp/wa.apk android-container:/tmp/wa.apk || true
+          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1" || true
+          echo "✅ WhatsApp installation step complete!"
 
       - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
         run: |
