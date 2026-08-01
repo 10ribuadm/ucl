@@ -32,16 +32,18 @@ jobs:
           docker exec -i android-container bash -c "adb shell settings put global window_animation_scale 0 && adb shell settings put global transition_animation_scale 0 && adb shell settings put global animator_duration_scale 0" || true
           docker exec -i android-container bash -c "adb shell setprop ro.product.model 'SM-G973F' && adb shell setprop ro.product.brand 'samsung' && adb shell setprop ro.product.manufacturer 'samsung'" || true
 
-      - name: 📲 Install WhatsApp Consumer & WhatsApp Business APK
+      - name: 📲 Direct Download, Install & Instant Open WhatsApp Official
         run: |
-          echo "📥 Downloading WhatsApp Official APK & WhatsApp Business..."
-          curl -sL -o /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
-          curl -sL -o /tmp/wab.apk "https://androidapksfree.com/wp-content/uploads/apks/whatsapp-business-2-24-15-77.apk" || true
-          echo "⚙️ Installing WhatsApp & WhatsApp Business into Android..."
+          echo "📥 Downloading WhatsApp Official APK directly from whatsapp.com..."
+          curl -sL -o /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || wget -q -O /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
+          ls -lh /tmp/wa.apk || true
+          echo "⚙️ Copying and installing WhatsApp into Android Container..."
           docker cp /tmp/wa.apk android-container:/tmp/wa.apk || true
-          docker cp /tmp/wab.apk android-container:/tmp/wab.apk || true
-          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb install -g -r /tmp/wab.apk && adb shell monkey -p com.whatsapp.w4b 1 || adb shell monkey -p com.whatsapp 1" || true
-          echo "✅ WhatsApp installation step complete!"
+          docker exec -i android-container bash -c "adb wait-for-device" || true
+          docker exec -i android-container bash -c "adb install -g -r /tmp/wa.apk" || true
+          echo "🚀 Instant Launching WhatsApp on Screen..."
+          docker exec -i android-container bash -c "adb shell am start -n com.whatsapp/.Main" || docker exec -i android-container bash -c "adb shell monkey -p com.whatsapp 1" || true
+          echo "✅ WhatsApp successfully installed and opened on screen!"
 
       - name: 🌐 Create Secure Web Tunnel URL & Auto-Publish to Portal
         run: |
