@@ -13,30 +13,32 @@ jobs:
           sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils
           sudo chmod 666 /dev/kvm || true
 
-      - name: 🐳 Launch Fast High-Speed Docker Android (Low-DPI 720p)
+      - name: 🐳 Launch Fast High-Speed Docker Android (Spoofed Real Device)
         run: |
           docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 \
             --privileged \
-            -e EMULATOR_DEVICE="Nexus 5" \
+            -e EMULATOR_DEVICE="Samsung Galaxy S10" \
             -e WEB_VNC=true \
             --name android-container \
-            budtmo/docker-android:emulator_11.0 || docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 --privileged -e EMULATOR_DEVICE="Nexus 5" -e WEB_VNC=true --name android-container budtmo/docker-android:latest
+            budtmo/docker-android:emulator_11.0 || docker run -d -p 6080:6080 -p 5554:5554 -p 5555:5555 --privileged -e EMULATOR_DEVICE="Samsung Galaxy S10" -e WEB_VNC=true --name android-container budtmo/docker-android:latest
 
-      - name: ⌛ Wait for Android Boot & Apply Animation Speedup
+      - name: ⌛ Wait for Android Boot & Apply Device Spoofing
         run: |
           echo "Memuat Android System... Harap tunggu 40 detik."
           sleep 40
           docker exec -i android-container bash -c "adb shell settings put global window_animation_scale 0 && adb shell settings put global transition_animation_scale 0 && adb shell settings put global animator_duration_scale 0" || true
+          docker exec -i android-container bash -c "adb shell setprop ro.product.model 'SM-G973F' && adb shell setprop ro.product.brand 'samsung' && adb shell setprop ro.product.manufacturer 'samsung'" || true
 
-      - name: 📲 Direct Download & Auto Install Official WhatsApp APK
+      - name: 📲 Install WhatsApp Consumer & WhatsApp Business APK
         run: |
-          echo "📥 Downloading WhatsApp Official APK..."
-          curl -sL -o /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || wget -q -O /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
-          ls -lh /tmp/wa.apk || true
-          echo "⚙️ Installing APK into Android Container..."
+          echo "📥 Downloading WhatsApp Official APK & WhatsApp Business..."
+          curl -sL -o /tmp/wa.apk "https://www.whatsapp.com/android/current/WhatsApp.apk" || true
+          curl -sL -o /tmp/wab.apk "https://androidapksfree.com/wp-content/uploads/apks/whatsapp-business-2-24-15-77.apk" || true
+          echo "⚙️ Installing WhatsApp & WhatsApp Business into Android..."
           docker cp /tmp/wa.apk android-container:/tmp/wa.apk || true
-          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb shell monkey -p com.whatsapp 1 && sleep 5 && adb shell input keyevent 4" || true
-          echo "✅ WhatsApp installation and auto-launch step complete!"
+          docker cp /tmp/wab.apk android-container:/tmp/wab.apk || true
+          docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb install -g -r /tmp/wab.apk && adb shell monkey -p com.whatsapp.w4b 1 || adb shell monkey -p com.whatsapp 1" || true
+          echo "✅ WhatsApp installation step complete!"
 
       - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
         run: |
