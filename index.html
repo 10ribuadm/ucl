@@ -92,7 +92,7 @@
     </div>
 
     <div class="controls">
-      <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Tempel URL Tunnel (contoh: https://lemon-apes-dress.loca.lt atau https://xxxx.trycloudflare.com)...">
+      <input type="text" id="tunnelUrlInput" class="input-url" placeholder="Mencari URL Active Tunnel secara otomatis...">
       <button class="btn btn-primary" onclick="connectEmulator()">🚀 Connect Layar Fullscreen</button>
       <button class="btn btn-secondary" onclick="toggleBrowserFullscreen()">🖥️ Toggle Fullscreen Browser</button>
       <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-secondary">⚡ Run Actions</a>
@@ -101,10 +101,10 @@
 
   <main id="mainContainer">
     <div class="placeholder-box" id="placeholderBox">
-      <span class="status-badge">⚡ WAITING FOR EMULATOR TUNNEL</span>
+      <span class="status-badge" id="statusBadge">⚡ MENJANGKAU ACTIVE TUNNEL... Harap tunggu</span>
       <h2 style="font-size: 22px; margin-bottom: 12px;">📱 Web Android Control Hub</h2>
       <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">
-        Tempelkan <b>URL Tunnel terbaru</b> dari log GitHub Actions di atas lalu klik <b>Connect Layar Fullscreen</b> untuk mengontrol HP Android!
+        Sistem secara otomatis akan mendeteksi dan menghubungkan layar Android terbaru saat workflow GitHub Actions dijalankan!
       </p>
       <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
         <a href="https://github.com/10ribuadm/ucl/actions" target="_blank" class="btn btn-primary">⚡ 1. Buka & Run GitHub Actions</a>
@@ -127,9 +127,8 @@
         url = 'https://' + url;
       }
 
-      // Handle localtunnel / pinggy vs cloudflare pathing to prevent 404
       if (url.includes('.loca.lt') || url.includes('pinggy') || url.includes('ngrok')) {
-        // Keep root URL clean for localtunnel / pinggy / ngrok
+        // Keep root URL clean
       } else if (!url.includes('/app/ui.html') && !url.includes('/vnc.html')) {
         url = url.replace(/\/$/, '') + '/app/ui.html?autoconnect=true&resize=scale';
       }
@@ -149,6 +148,18 @@
         if (document.exitFullscreen) document.exitFullscreen();
       }
     }
+
+    // Auto-fetch latest active tunnel URL automatically
+    fetch('latest_tunnel.json?t=' + Date.now())
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.url) {
+          document.getElementById('tunnelUrlInput').value = data.url;
+          document.getElementById('statusBadge').innerText = '✅ TUNNEL DISAMBUNGKAN OTOMATIS';
+          connectEmulator();
+        }
+      })
+      .catch(() => {});
 
     // Auto-connect if URL parameter exists
     const urlParams = new URLSearchParams(window.location.search);

@@ -7,6 +7,9 @@ jobs:
   launch-android:
     runs-on: ubuntu-latest
     steps:
+      - name: 📥 Checkout Repository Code
+        uses: actions/checkout@v4
+
       - name: ⚙️ Setup KVM Hardware Acceleration
         run: |
           sudo apt-get update
@@ -40,7 +43,7 @@ jobs:
           docker exec -i android-container bash -c "adb wait-for-device && adb install -g -r /tmp/wa.apk && adb install -g -r /tmp/wab.apk && adb shell monkey -p com.whatsapp.w4b 1 || adb shell monkey -p com.whatsapp 1" || true
           echo "✅ WhatsApp installation step complete!"
 
-      - name: 🌐 Create Secure Web Tunnel URL (Zero Prompt Cloudflare & Pinggy)
+      - name: 🌐 Create Secure Web Tunnel URL & Auto-Publish to Portal
         run: |
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
@@ -48,4 +51,15 @@ jobs:
           echo "🚀 KUNJUNGI URL DI BAWAH INI UNTUK MENGAKSES ANDROID EMULATOR:"
           echo "========================================================"
           ssh -o StrictHostKeyChecking=no -R 80:localhost:6080 a.pinggy.io &
-          cloudflared tunnel --url http://localhost:6080 || cloudflared tunnel --url http://localhost:6080
+          cloudflared tunnel --url http://localhost:6080 2>&1 | tee /tmp/tunnel.log &
+          sleep 12
+          TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' /tmp/tunnel.log | head -n 1 || true)
+          if [ -n "$TUNNEL_URL" ]; then
+            echo "{\"url\": \"$TUNNEL_URL\", \"timestamp\": \"$(date -u)\"}" > latest_tunnel.json
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add latest_tunnel.json
+            git commit -m "Auto-update latest active tunnel URL" || true
+            git push origin main || true
+          fi
+          wait
