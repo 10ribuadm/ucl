@@ -11,23 +11,10 @@ category = os.environ.get('CATEGORY', 'General')
 callback_url = os.environ.get('CALLBACK_URL')
 bot_token = os.environ.get('BOT_TOKEN')
 chat_id = os.environ.get('CHAT_ID')
-yt_cookies = os.environ.get('YOUTUBE_COOKIES')
 
 if not url:
     print('❌ No Target URL specified!')
     sys.exit(1)
-
-# 1. Cookie Setup (Only if valid)
-cookies_path = '/tmp/yt_cookies.txt'
-has_cookies = False
-if yt_cookies and yt_cookies.strip() and len(yt_cookies.strip()) > 50:
-    cookie_content = yt_cookies.strip().replace('\r\n', '\n')
-    if not cookie_content.startswith('# Netscape'):
-        cookie_content = '# Netscape HTTP Cookie File\n' + cookie_content
-    with open(cookies_path, 'w', encoding='utf-8') as cf:
-        cf.write(cookie_content)
-    has_cookies = True
-    print('🍪 Loaded YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
 
 video_id = None
 match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
@@ -66,76 +53,30 @@ def check_valid_video():
                     return candidate
     return None
 
-# Strategy 1: Cobalt API Engine (v10 API)
-if video_id:
-    print('\n⚡ Strategy #1: Cobalt API Engine (Cloud Proxy)...')
-    cobalt_endpoints = [
-        "https://api.cobalt.tools",
-        "https://cobalt.api.sc7.io",
-        "https://cobalt.crnl.dev"
-    ]
-    for c_inst in cobalt_endpoints:
-        try:
-            print(f'Trying Cobalt endpoint: {c_inst}')
-            headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            c_payload = {
-                'url': f'https://www.youtube.com/watch?v={video_id}',
-                'videoQuality': '1080'
-            }
-            c_res = requests.post(f'{c_inst}/', json=c_payload, headers=headers, timeout=15)
-            if c_res.status_code == 200:
-                c_data = c_res.json()
-                stream_url = c_data.get('url')
-                if stream_url:
-                    print('Found stream URL from Cobalt API! Downloading stream...')
-                    dl_r = requests.get(stream_url, stream=True, timeout=180, headers={'User-Agent': 'Mozilla/5.0'})
-                    if dl_r.status_code == 200:
-                        candidate = '/tmp/video.mp4'
-                        with open(candidate, 'wb') as vf:
-                            for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
-                                if chunk: vf.write(chunk)
-                        if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
-                            video_path = candidate
-                            print(f'✅ Strategy #1 (Cobalt API {c_inst}) Succeeded!')
-                            break
-        except Exception as e_cob:
-            print(f'Cobalt endpoint ({c_inst}) warning:', e_cob)
+# Strategy 1: yt-dlp Android Player Engine (No expired cookies)
+print('\n⚡ Strategy #1: yt-dlp Android Client Engine (Clean IP)...')
+yt_strategies = [
+    ['yt-dlp', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--extractor-args', 'youtube:player_client=android', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--extractor-args', 'youtube:player_client=mweb', '-f', 'b/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+]
 
-# Strategy 2: yt-dlp with --js-runtimes node (No cookies & With cookies)
+for idx, cmd in enumerate(yt_strategies):
+    print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:5])}... ---')
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f'Strategy #{idx+1} stderr snippet:', result.stderr[:250].replace('\n', ' '))
+    candidate = check_valid_video()
+    if candidate:
+        video_path = candidate
+        print(f'✅ Strategy #1 (yt-dlp Strategy #{idx+1}) Succeeded!')
+        break
+
+# Strategy 2: PyTubeFix Android Engine
 if not video_path:
-    print('\n⚡ Strategy #2: yt-dlp with JS Runtime (Node)...')
-    yt_commands = []
-    
-    # 2a. Without cookies (Clean IP test)
-    yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-    yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-    yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-    yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-    
-    # 2b. With cookies if provided
-    if has_cookies:
-        yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-        yt_commands.append(['yt-dlp', '--js-runtimes', 'node', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url])
-
-    for idx, cmd in enumerate(yt_commands):
-        print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:6])}... ---')
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f'Strategy #{idx+1} stderr snippet:', result.stderr[:200].replace('\n', ' '))
-        candidate = check_valid_video()
-        if candidate:
-            video_path = candidate
-            print(f'✅ Strategy #2 (yt-dlp Strategy #{idx+1}) Succeeded!')
-            break
-
-# Strategy 3: PyTubeFix Engine
-if not video_path:
-    print('\n⚡ Strategy #3: PyTubeFix Engine...')
-    for client_mode in ['WEB', 'MWEB', 'ANDROID']:
+    print('\n⚡ Strategy #2: PyTubeFix Android Engine...')
+    for client_mode in ['ANDROID', 'MWEB']:
         try:
             print(f'Trying PyTubeFix client={client_mode}...')
             from pytubefix import YouTube
@@ -151,14 +92,14 @@ if not video_path:
                 candidate = check_valid_video()
                 if candidate:
                     video_path = candidate
-                    print(f'✅ Strategy #3 (PyTubeFix {client_mode}) Succeeded!')
+                    print(f'✅ Strategy #2 (PyTubeFix {client_mode}) Succeeded!')
                     break
         except Exception as e_ptf:
             print(f'PyTubeFix client={client_mode} error:', e_ptf)
 
-# Strategy 4: Invidious Stream Engine
+# Strategy 3: Invidious API Stream Engine Fallback
 if not video_path and video_id:
-    print('\n⚡ Strategy #4: Invidious API Stream Engine...')
+    print('\n⚡ Strategy #3: Invidious API Stream Engine...')
     invidious_instances = [
         "https://invidious.private.coffee",
         "https://invidious.nerdvpn.de",
@@ -185,7 +126,7 @@ if not video_path and video_id:
                                 if chunk: vf.write(chunk)
                         if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
                             video_path = candidate
-                            print(f'✅ Strategy #4 (Invidious {instance}) Succeeded!')
+                            print(f'✅ Strategy #3 (Invidious {instance}) Succeeded!')
                             break
         except Exception as e_inv:
             print(f'Invidious instance warning ({instance}):', e_inv)
