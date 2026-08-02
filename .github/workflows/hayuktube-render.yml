@@ -6,37 +6,32 @@ on:
   workflow_dispatch:
     inputs:
       video_url:
-        description: 'URL Video YouTube'
+        description: 'YouTube / Video URL to Download & Render'
         required: true
-        default: ''
       category:
-        description: 'Kategori Video'
+        description: 'Category (MUSIC, VIRAL, GENERAL, GAMING, HIBURAN)'
         required: false
         default: 'General'
 
 jobs:
-  cloud-render:
+  cloud_render:
+    name: ⚡ 1Gbps High-Speed Cloud Renderer
     runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout Code
-        uses: actions/checkout@v4
+    timeout-minutes: 60
 
-      - name: 🐍 Setup Python & Dependencies
+    steps:
+      - name: ⚙️ Setup Python 3.11 & FFmpeg Runtime Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: 🟢 Setup Node.js Runtime for yt-dlp
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 📦 Install yt-dlp, curl-cffi, pytubefix, ffmpeg & requests
+      - name: 📦 Install High-Performance Downloader Libraries & FFmpeg
         run: |
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install -U yt-dlp curl-cffi pytubefix requests
+          sudo apt-get update && sudo apt-get install -y ffmpeg libcurl4-openssl-dev
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir yt-dlp pytubefix cloudscraper requests curl_cffi
 
-      - name: ⚡ High-Speed Cloud Download & Telegram Cloud Vault Sync
+      - name: 🚀 Download, Render & Import Video to Telegram Cloud Vault
         env:
           TARGET_URL: ${{ github.event.client_payload.url || github.event.inputs.video_url }}
           CATEGORY: ${{ github.event.client_payload.category || github.event.inputs.category }}
@@ -47,274 +42,230 @@ jobs:
         run: |
           echo "🚀 Processing Target URL: $TARGET_URL"
           echo "📦 Telegram Target Cloud Vault Channel: $CHAT_ID"
-          python -c "
-          import os, sys, json, subprocess, requests, re, traceback
+          cat << 'EOF' > /tmp/runner.py
+import os
+import sys
+import json
+import subprocess
+import requests
+import re
+import traceback
 
-          url = os.environ.get('TARGET_URL')
-          category = os.environ.get('CATEGORY', 'General')
-          callback_url = os.environ.get('CALLBACK_URL')
-          bot_token = os.environ.get('BOT_TOKEN')
-          chat_id = os.environ.get('CHAT_ID')
-          yt_cookies = os.environ.get('YOUTUBE_COOKIES')
+url = os.environ.get('TARGET_URL')
+category = os.environ.get('CATEGORY', 'General')
+callback_url = os.environ.get('CALLBACK_URL')
+bot_token = os.environ.get('BOT_TOKEN')
+chat_id = os.environ.get('CHAT_ID')
+yt_cookies = os.environ.get('YOUTUBE_COOKIES')
 
-          if not url:
-              print('❌ No Target URL specified!')
-              sys.exit(1)
+if not url:
+    print('❌ No Target URL specified!')
+    sys.exit(1)
 
-          # 1. Cookie Sanitization & Setup
-          cookies_path = '/tmp/yt_cookies.txt'
-          has_custom_cookies = False
-          if yt_cookies and yt_cookies.strip():
-              cookie_content = yt_cookies.strip().replace('\r\n', '\n')
-              if not cookie_content.startswith('# Netscape'):
-                  cookie_content = '# Netscape HTTP Cookie File\n' + cookie_content
-              with open(cookies_path, 'w', encoding='utf-8') as cf:
-                  cf.write(cookie_content)
-              has_custom_cookies = True
-              print('🍪 Loaded & Sanitized YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
-          else:
-              try:
-                  s = requests.Session()
-                  s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, timeout=10)
-                  lines = ['# Netscape HTTP Cookie File\n']
-                  for c in s.cookies:
-                      lines.append(f'.youtube.com\tTRUE\t/\tFALSE\t0\t{c.name}\t{c.value}\n')
-                  with open(cookies_path, 'w', encoding='utf-8') as cf:
-                      cf.writelines(lines)
-                  print('🍪 Auto-generated fresh YouTube Session Cookies (Count:', len(s.cookies), ')')
-              except Exception as e_ck:
-                  print('Cookie auto-gen warning:', e_ck)
+# 1. Cookie Sanitization & Setup
+cookies_path = '/tmp/yt_cookies.txt'
+has_custom_cookies = False
+if yt_cookies and yt_cookies.strip():
+    cookie_content = yt_cookies.strip().replace('\r\n', '\n')
+    if not cookie_content.startswith('# Netscape'):
+        cookie_content = '# Netscape HTTP Cookie File\n' + cookie_content
+    with open(cookies_path, 'w', encoding='utf-8') as cf:
+        cf.write(cookie_content)
+    has_custom_cookies = True
+    print('🍪 Loaded & Sanitized YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
+else:
+    try:
+        s = requests.Session()
+        s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, timeout=10)
+        lines = ['# Netscape HTTP Cookie File\n']
+        for c in s.cookies:
+            lines.append(f'.youtube.com\tTRUE\t/\tFALSE\t0\t{c.name}\t{c.value}\n')
+        with open(cookies_path, 'w', encoding='utf-8') as cf:
+            cf.writelines(lines)
+        print('🍪 Auto-generated fresh YouTube Session Cookies (Count:', len(s.cookies), ')')
+    except Exception as e_ck:
+        print('Cookie auto-gen warning:', e_ck)
 
-          video_id = None
-          match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
-          if match:
-              video_id = match.group(1)
+video_id = None
+match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
+if match:
+    video_id = match.group(1)
 
-          title = 'Downloaded Video'
-          description = f'Source: {url}'
-          duration = 0
-          thumb_url = None
+title = 'Downloaded Video'
+description = f'Source: {url}'
+duration = 0
+thumb_url = None
 
-          if video_id:
-              thumb_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
-              try:
-                  oembed_resp = requests.get(f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json', timeout=10)
-                  if oembed_resp.status_code == 200:
-                      o_data = oembed_resp.json()
-                      if o_data.get('title'): title = o_data['title']
-                      if o_data.get('author_name'): description = f\"Channel: {o_data['author_name']}\nSource: {url}\"
-              except Exception: pass
+if video_id:
+    thumb_url = f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
+    try:
+        oembed_resp = requests.get(f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json', timeout=10)
+        if oembed_resp.status_code == 200:
+            o_data = oembed_resp.json()
+            if o_data.get('title'):
+                title = o_data['title']
+            if o_data.get('author_name'):
+                description = f"Channel: {o_data['author_name']}\nSource: {url}"
+            if o_data.get('thumbnail_url'):
+                thumb_url = o_data['thumbnail_url']
+            print('✅ Extracted Video Title via oEmbed API:', title)
+    except Exception as e_oe:
+        print('oEmbed API error:', e_oe)
 
-          video_path = None
+video_path = None
 
-          # Check direct MP4/video link
-          if any(url.lower().endswith(ext) or ext+'?' in url.lower() for ext in ['.mp4', '.mkv', '.webm', '.mov']):
-              print('⚡ Direct Video File URL detected, streaming directly...')
-              try:
-                  res = requests.get(url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
-                  if res.status_code == 200:
-                      candidate = '/tmp/video.mp4'
-                      with open(candidate, 'wb') as vf:
-                          for chunk in res.iter_content(chunk_size=2*1024*1024):
-                              if chunk: vf.write(chunk)
-                      if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
-                          video_path = candidate
-                          url_filename = os.path.basename(url.split('?')[0])
-                          if url_filename and len(url_filename) > 3 and title == 'Downloaded Video':
-                              title = url_filename
-              except Exception as e_direct:
-                  print('Direct stream download error:', e_direct)
+# Strategy A: Multi-Client & Impersonate yt-dlp Execution
+print('📥 Executing yt-dlp multi-strategy download engine...')
+strategies = [
+    ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=mweb,ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+]
 
-          # Strategy A: Multi-Client & Impersonate yt-dlp Execution
-          if not video_path:
-              print('📥 Executing yt-dlp multi-strategy download engine...')
-              strategies = [
-                  # 1. Impersonate Chrome + Android Client
-                  ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-                  # 2. Impersonate Chrome + WEB Client
-                  ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-                  # 3. Android Client + Plain
-                  ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-                  # 4. IOS / MWEB Client
-                  ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=mweb,ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-                  # 5. Fallback Best Format
-                  ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
-              ]
+for idx, cmd in enumerate(strategies):
+    print(f'\n--- 🔄 Trying Strategy #{idx+1}: {" ".join(cmd[:6])}... ---')
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    for f in os.listdir('/tmp'):
+        if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
+            candidate = os.path.join('/tmp', f)
+            file_sz = os.path.getsize(candidate)
+            if file_sz >= 1000000:
+                video_path = candidate
+                break
+    if video_path:
+        print(f'✅ Successfully downloaded video stream with Strategy #{idx+1}!')
+        break
 
-              for idx, cmd in enumerate(strategies):
-                  print(f'\n--- 🔄 Trying Strategy #{idx+1}: {\" \".join(cmd[:6])}... ---')
-                  result = subprocess.run(cmd, capture_output=True, text=True)
-                  print('--- [STDOUT] ---')
-                  print(result.stdout if result.stdout else '(empty stdout)')
-                  print('--- [STDERR] ---')
-                  print(result.stderr if result.stderr else '(empty stderr)')
-                  print(f'--- Exit Code: {result.returncode} ---')
+# Strategy B: Invidious API Stream Engine Fallback
+if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
+    print('\n⚡ Retrying YouTube download via Invidious API Stream Engine...')
+    invidious_instances = [
+        "https://invidious.nerdvpn.de",
+        "https://inv.tux.pizza",
+        "https://invidious.drgns.space",
+        "https://yt.artemislena.eu"
+    ]
+    for instance in invidious_instances:
+        try:
+            print(f'⚡ Trying Invidious instance: {instance}')
+            api_url = f"{instance}/api/v1/videos/{video_id}"
+            inv_res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+            if inv_res.status_code == 200:
+                inv_data = inv_res.json()
+                if inv_data.get('title') and title == 'Downloaded Video':
+                    title = inv_data['title']
+                if inv_data.get('formatStreams'):
+                    best_str = inv_data['formatStreams'][-1]
+                    s_url = best_str['url']
+                    print("Found stream via Invidious, downloading...")
+                    dl_r = requests.get(s_url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
+                    if dl_r.status_code == 200:
+                        candidate = '/tmp/video.mp4'
+                        with open(candidate, 'wb') as vf:
+                            for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
+                                if chunk: vf.write(chunk)
+                        if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
+                            video_path = candidate
+                            print(f'✅ Successfully downloaded video stream via Invidious ({instance})!')
+                            break
+        except Exception as e_inv:
+            print(f'Invidious instance warning ({instance}):', e_inv)
 
-                  for f in os.listdir('/tmp'):
-                      if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
-                          candidate = os.path.join('/tmp', f)
-                          file_sz = os.path.getsize(candidate)
-                          print(f'🔍 Found candidate file: {f} (Size: {file_sz} bytes / {(file_sz/(1024*1024)):.2f} MB)')
-                          if file_sz >= 1000000:
-                              video_path = candidate
-                              break
-                          else:
-                              print(f'⚠️ Deleting tiny candidate {f} (size too small: {file_sz} bytes)')
-                              os.remove(candidate)
-                  if video_path:
-                      print(f'✅ Successfully downloaded video stream with Strategy #{idx+1}!')
-                      break
+if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
+    print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
+    sys.exit(1)
 
-          # Strategy C: Invidious API Fallback Stream Engine (Bypasses GitHub Bot Check)
-          if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
-              print('\n⚡ Retrying YouTube download via Invidious API Stream Engine...')
-              invidious_instances = [
-                  "https://invidious.nerdvpn.de",
-                  "https://inv.tux.pizza",
-                  "https://invidious.drgns.space",
-                  "https://yt.artemislena.eu"
-              ]
-              for instance in invidious_instances:
-                  try:
-                      print(f'⚡ Trying Invidious instance: {instance}')
-                      api_url = f"{instance}/api/v1/videos/{video_id}"
-                      inv_res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
-                      if inv_res.status_code == 200:
-                          inv_data = inv_res.json()
-                          if inv_data.get('title') and title == 'Downloaded Video':
-                              title = inv_data['title']
-                          if inv_data.get('formatStreams'):
-                              best_str = inv_data['formatStreams'][-1]
-                              s_url = best_str['url']
-                              print(f"Found stream via Invidious ({best_str.get('qualityLabel', 'HD')}), downloading...")
-                              dl_r = requests.get(s_url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
-                              if dl_r.status_code == 200:
-                                  candidate = '/tmp/video.mp4'
-                                  with open(candidate, 'wb') as vf:
-                                      for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
-                                          if chunk: vf.write(chunk)
-                                  if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
-                                      video_path = candidate
-                                      print(f'✅ Successfully downloaded video stream via Invidious ({instance})!')
-                                      break
-                  except Exception as e_inv:
-                      print(f'Invidious instance warning ({instance}):', e_inv)
+file_size = os.path.getsize(video_path)
+print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
 
-          if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-              print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
-              sys.exit(1)
+# Extract Duration if missing
+if duration == 0:
+    try:
+        dur_res = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', video_path], capture_output=True, text=True)
+        if dur_res.returncode == 0 and dur_res.stdout.strip():
+            duration = int(float(dur_res.stdout.strip()))
+    except Exception: pass
 
-          file_size = os.path.getsize(video_path)
-          print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
+subtitles = []
 
-          # 3. Extract Metadata & Duration
-          meta_cmd = ['yt-dlp', '--cookies', cookies_path, '-j', '--no-playlist', url]
-          res = subprocess.run(meta_cmd, capture_output=True, text=True)
-          if res.returncode == 0:
-              try:
-                  meta = json.loads(res.stdout)
-                  if meta.get('title') and title == 'Downloaded Video': title = meta['title']
-                  if meta.get('duration'): duration = meta['duration']
-                  if meta.get('description'): description = meta['description']
-                  if meta.get('thumbnail'): thumb_url = meta['thumbnail']
-              except Exception: pass
+# 4. Process Thumbnail & Upload to Telegram Vault
+thumb_file_id = None
+if thumb_url:
+    try:
+        t_res = requests.get(thumb_url, timeout=15)
+        if t_res.status_code == 200:
+            thumb_path = '/tmp/thumb.jpg'
+            with open(thumb_path, 'wb') as tf:
+                tf.write(t_res.content)
+            clean_t = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
+            with open(thumb_path, 'rb') as tf:
+                files = {'photo': (f'thumb_{clean_t[:20]}.jpg', tf, 'image/jpeg')}
+                resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'🖼️ Cover Thumbnail for {title[:40]}'}, files=files)
+                if resp.status_code == 200 and resp.json().get('ok'):
+                    photos = resp.json()['result']['photo']
+                    thumb_file_id = photos[-1]['file_id']
+                    print('🖼️ HD Cover Thumbnail uploaded successfully! File ID:', thumb_file_id)
+            if os.path.exists(thumb_path): os.remove(thumb_path)
+    except Exception as e_th:
+        print('Thumbnail upload warning:', e_th)
 
-          subtitles = []
-          try:
-              sub_cmd = ['yt-dlp', '--cookies', cookies_path, '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
-              subprocess.run(sub_cmd, capture_output=True, text=True)
-              for sub_file in os.listdir('/tmp'):
-                  if sub_file.endswith('.vtt'):
-                      lang = 'id' if '.id.' in sub_file else 'en'
-                      with open(os.path.join('/tmp', sub_file), 'r', encoding='utf-8', errors='ignore') as sf:
-                          vtt_content = sf.read()
-                          subtitles.append({'lang': lang, 'label': 'Indonesian' if lang=='id' else 'English', 'vttData': vtt_content})
-          except Exception: pass
+# 5. Upload Video Chunks to Telegram Vault Channel
+CHUNK_SIZE = 15 * 1024 * 1024
+parts = []
+main_file_id = None
+clean_title = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
 
-          thumb_file_id = None
-          thumb_path = '/tmp/thumbnail.jpg'
+with open(video_path, 'rb') as vf:
+    part_idx = 0
+    offset = 0
+    num_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
+    while offset < file_size:
+        chunk = vf.read(CHUNK_SIZE)
+        chunk_len = len(chunk)
+        chunk_path = f'/tmp/chunk_{part_idx}.mp4'
+        with open(chunk_path, 'wb') as cf:
+            cf.write(chunk)
+        
+        upload_filename = f"{clean_title[:30]}.mp4" if num_parts == 1 else f"{clean_title[:30]}_part{part_idx+1}.mp4"
+        
+        with open(chunk_path, 'rb') as cf:
+            files = {'document': (upload_filename, cf, 'video/mp4')}
+            resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:40]} (Part {part_idx+1}/{num_parts})'}, files=files)
+            if resp.status_code == 200 and resp.json().get('ok'):
+                doc = resp.json()['result']['document']
+                fid = doc['file_id']
+                msg_id = resp.json()['result']['message_id']
+                if part_idx == 0: main_file_id = fid
+                parts.append({'partIndex': part_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len})
+        
+        if os.path.exists(chunk_path): os.remove(chunk_path)
+        offset += chunk_len
+        part_idx += 1
 
-          if thumb_url:
-              try:
-                  t_res = requests.get(thumb_url, timeout=15)
-                  if t_res.status_code == 200:
-                      with open(thumb_path, 'wb') as tf:
-                          tf.write(t_res.content)
-              except Exception: pass
+payload = {
+    'status': 'success',
+    'media': {
+        'title': title,
+        'description': description[:500],
+        'category': category,
+        'duration': duration,
+        'fileSize': file_size,
+        'fileType': 'video',
+        'mimeType': 'video/mp4',
+        'fileId': main_file_id,
+        'thumbnailFileId': thumb_file_id or main_file_id,
+        'parts': parts,
+        'subtitles': subtitles
+    }
+}
 
-          if not os.path.exists(thumb_path) or os.path.getsize(thumb_path) == 0:
-              if video_id:
-                  try:
-                      hq_res = requests.get(f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg', timeout=15)
-                      if hq_res.status_code == 200:
-                          with open(thumb_path, 'wb') as tf:
-                              tf.write(hq_res.content)
-                  except Exception: pass
-
-          if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
-              try:
-                  with open(thumb_path, 'rb') as tf:
-                      files = {'photo': ('thumbnail.jpg', tf, 'image/jpeg')}
-                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'🖼️ Thumbnail for {title[:50]}'}, files=files)
-                      if resp.status_code == 200 and resp.json().get('ok'):
-                          thumb_file_id = resp.json()['result']['photo'][-1]['file_id']
-                          print('🖼️ Thumbnail photo uploaded successfully! File ID:', thumb_file_id)
-              except Exception as e_tp:
-                  print('Thumbnail upload warning:', e_tp)
-
-          clean_title = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
-          CHUNK_SIZE = 15 * 1024 * 1024
-          parts = []
-          main_file_id = None
-
-          with open(video_path, 'rb') as vf:
-              part_idx = 0
-              offset = 0
-              num_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
-              while offset < file_size:
-                  chunk = vf.read(CHUNK_SIZE)
-                  chunk_len = len(chunk)
-                  chunk_path = f'/tmp/chunk_{part_idx}.mp4'
-                  with open(chunk_path, 'wb') as cf:
-                      cf.write(chunk)
-                  
-                  upload_filename = f\"{clean_title[:30]}.mp4\" if num_parts == 1 else f\"{clean_title[:30]}_part{part_idx+1}.mp4\"
-                  
-                  with open(chunk_path, 'rb') as cf:
-                      files = {'document': (upload_filename, cf, 'video/mp4')}
-                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:40]} (Part {part_idx+1}/{num_parts})'}, files=files)
-                      if resp.status_code == 200 and resp.json().get('ok'):
-                          doc = resp.json()['result']['document']
-                          fid = doc['file_id']
-                          msg_id = resp.json()['result']['message_id']
-                          if part_idx == 0: main_file_id = fid
-                          parts.append({'partIndex': part_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len})
-                  
-                  if os.path.exists(chunk_path): os.remove(chunk_path)
-                  offset += chunk_len
-                  part_idx += 1
-
-          payload = {
-              'status': 'success',
-              'media': {
-                  'title': title,
-                  'description': description[:500],
-                  'category': category,
-                  'duration': duration,
-                  'fileSize': file_size,
-                  'fileType': 'video',
-                  'mimeType': 'video/mp4',
-                  'fileId': main_file_id,
-                  'thumbnailFileId': thumb_file_id or main_file_id,
-                  'parts': parts,
-                  'subtitles': subtitles
-              }
-          }
-
-          print('📡 Sending Completion Callback to VPS:', callback_url)
-          try:
-              cb_res = requests.post(callback_url, json=payload, timeout=15)
-              print('✅ Process Completed Successfully! Callback status:', cb_res.status_code)
-          except Exception as e_cb:
-              print('Callback warning:', e_cb)
-          "
+print('📡 Sending Completion Callback to VPS:', callback_url)
+try:
+    cb_res = requests.post(callback_url, json=payload, timeout=15)
+    print('✅ Process Completed Successfully! Callback status:', cb_res.status_code)
+except Exception as e_cb:
+    print('Callback warning:', e_cb)
+EOF
+          python3 /tmp/runner.py
