@@ -165,42 +165,44 @@ jobs:
                       print(f'✅ Successfully downloaded video stream with Strategy #{idx+1}!')
                       break
 
-          # Strategy B: Pytubefix Fallback with Detailed Diagnostics
-          if not video_path and video_id:
-              print('\n⚡ Retrying YouTube download via pytubefix fallback engine...')
-              for client_name in ['ANDROID', 'WEB', 'MWEB', 'TV']:
+          # Strategy C: Invidious API Fallback Stream Engine (Bypasses GitHub Bot Check)
+          if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
+              print('\n⚡ Retrying YouTube download via Invidious API Stream Engine...')
+              invidious_instances = [
+                  "https://invidious.nerdvpn.de",
+                  "https://inv.tux.pizza",
+                  "https://invidious.drgns.space",
+                  "https://yt.artemislena.eu"
+              ]
+              for instance in invidious_instances:
                   try:
-                      print(f'⚡ Trying pytubefix client: {client_name}')
-                      from pytubefix import YouTube
-                      yt = YouTube(url, client=client_name)
-                      if not title or title == 'Downloaded Video':
-                          title = yt.title
-                      stream = yt.streams.filter(file_extension='mp4').first()
-                      if stream:
-                          out_file = stream.download(output_path='/tmp', filename='video.mp4')
-                          if os.path.exists(out_file) and os.path.getsize(out_file) >= 1000000:
-                              video_path = out_file
-                              print(f'✅ Success downloading video stream via pytubefix ({client_name})!')
-                              break
-                  except Exception as e_pytube:
-                      print(f'Pytubefix warning ({client_name}):', e_pytube)
-                      traceback.print_exc()
+                      print(f'⚡ Trying Invidious instance: {instance}')
+                      api_url = f"{instance}/api/v1/videos/{video_id}"
+                      inv_res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                      if inv_res.status_code == 200:
+                          inv_data = inv_res.json()
+                          if inv_data.get('title') and title == 'Downloaded Video':
+                              title = inv_data['title']
+                          if inv_data.get('formatStreams'):
+                              best_str = inv_data['formatStreams'][-1]
+                              s_url = best_str['url']
+                              print(f"Found stream via Invidious ({best_str.get('qualityLabel', 'HD')}), downloading...")
+                              dl_r = requests.get(s_url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
+                              if dl_r.status_code == 200:
+                                  candidate = '/tmp/video.mp4'
+                                  with open(candidate, 'wb') as vf:
+                                      for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
+                                          if chunk: vf.write(chunk)
+                                  if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
+                                      video_path = candidate
+                                      print(f'✅ Successfully downloaded video stream via Invidious ({instance})!')
+                                      break
+                  except Exception as e_inv:
+                      print(f'Invidious instance warning ({instance}):', e_inv)
 
           if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-              print('\n⚠️ GitHub Actions runner IP blocked by YouTube bot check.')
-              print('🔄 Triggering VPS HayukCloud Hybrid Fallback Engine...')
-              try:
-                  fb_payload = {
-                      'status': 'fallback_vps',
-                      'url': url,
-                      'category': category,
-                      'reason': 'GitHub Actions datacenter IP bot restricted'
-                  }
-                  cb_res = requests.post(callback_url, json=fb_payload, timeout=15)
-                  print('✅ VPS Fallback Engine trigger sent successfully! Response Status:', cb_res.status_code)
-              except Exception as e_fb:
-                  print('Fallback trigger error:', e_fb)
-              sys.exit(0)
+              print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
+              sys.exit(1)
 
           file_size = os.path.getsize(video_path)
           print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
