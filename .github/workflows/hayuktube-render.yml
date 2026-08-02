@@ -61,7 +61,6 @@ jobs:
               print('❌ No Target URL specified!')
               sys.exit(1)
 
-          # Auto-generate fresh YouTube Netscape Session Cookies if YOUTUBE_COOKIES secret is not provided
           cookies_path = '/tmp/yt_cookies.txt'
           if yt_cookies and yt_cookies.strip():
               with open(cookies_path, 'w', encoding='utf-8') as cf:
@@ -70,13 +69,13 @@ jobs:
           else:
               try:
                   s = requests.Session()
-                  s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}, timeout=10)
+                  s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, timeout=10)
                   lines = ['# Netscape HTTP Cookie File\n']
                   for c in s.cookies:
                       lines.append(f'.youtube.com\tTRUE\t/\tFALSE\t0\t{c.name}\t{c.value}\n')
                   with open(cookies_path, 'w', encoding='utf-8') as cf:
                       cf.writelines(lines)
-                  print('🍪 Auto-generated fresh YouTube Session Cookies successfully! (Cookies count:', len(s.cookies), ')')
+                  print('🍪 Auto-generated fresh YouTube Session Cookies (Count:', len(s.cookies), ')')
               except Exception as e_ck:
                   print('Cookie auto-gen warning:', e_ck)
 
@@ -102,7 +101,7 @@ jobs:
 
           video_path = None
 
-          # Check if URL is a direct MP4/video link
+          # Check direct MP4/video URL
           if any(url.lower().endswith(ext) or ext+'?' in url.lower() for ext in ['.mp4', '.mkv', '.webm', '.mov']):
               print('⚡ Direct Video File URL detected, streaming directly...')
               try:
@@ -120,18 +119,14 @@ jobs:
               except Exception as e_direct:
                   print('Direct stream download error:', e_direct)
 
-          # Strategy A: yt-dlp with Session Cookies & Client strategies
+          # Strategy A: yt-dlp with flexible format fallbacks & session cookies
           if not video_path:
-              print('📥 Downloading video stream via yt-dlp with session cookies...')
-              commands_to_try = []
-
-              if video_id: # YouTube URL
-                  for client in ['web', 'mweb', 'tv_embedded', 'ios']:
-                      cmd = ['yt-dlp', '--js-runtimes', 'node', '--cookies', cookies_path, '--extractor-args', f'youtube:player_client={client}', '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
-                      commands_to_try.append(cmd)
-
-              cmd_plain = ['yt-dlp', '--cookies', cookies_path, '-f', 'best[ext=mp4]/bestvideo+bestaudio/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
-              commands_to_try.append(cmd_plain)
+              print('📥 Downloading video stream via yt-dlp...')
+              commands_to_try = [
+                  ['yt-dlp', '--cookies', cookies_path, '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  ['yt-dlp', '--cookies', cookies_path, '-f', 'b', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  ['yt-dlp', '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+              ]
 
               for cmd in commands_to_try:
                   subprocess.run(cmd)
@@ -154,9 +149,7 @@ jobs:
                       yt = YouTube(url, client=client_name)
                       if not title or title == 'Downloaded Video':
                           title = yt.title
-                      stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-                      if not stream:
-                          stream = yt.streams.filter(file_extension='mp4').first()
+                      stream = yt.streams.filter(file_extension='mp4').first()
                       if stream:
                           out_file = stream.download(output_path='/tmp', filename='video.mp4')
                           if os.path.exists(out_file) and os.path.getsize(out_file) >= 1000000:
