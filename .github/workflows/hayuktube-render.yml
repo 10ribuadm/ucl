@@ -138,21 +138,24 @@ jobs:
           # Strategy B: pytubefix (Built-in YouTube PO-Token & JS Solver)
           if not video_path and video_id:
               print('⚡ Retrying YouTube download via pytubefix (PO-Token Engine)...')
-              try:
-                  from pytubefix import YouTube
-                  yt = YouTube(url, client='ANDROID')
-                  if not title or title == 'Downloaded Video':
-                      title = yt.title
-                  stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-                  if not stream:
-                      stream = yt.streams.filter(file_extension='mp4').first()
-                  if stream:
-                      out_file = stream.download(output_path='/tmp', filename='video.mp4')
-                      if os.path.exists(out_file) and os.path.getsize(out_file) >= 1000000:
-                          video_path = out_file
-                          print('✅ Success downloading video stream via pytubefix!')
-              except Exception as e_pytube:
-                  print('Pytubefix warning:', e_pytube)
+              for client_name in ['WEB', 'MWEB', 'TV', 'IOS']:
+                  try:
+                      print(f'⚡ Trying pytubefix client: {client_name}')
+                      from pytubefix import YouTube
+                      yt = YouTube(url, client=client_name)
+                      if not title or title == 'Downloaded Video':
+                          title = yt.title
+                      stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+                      if not stream:
+                          stream = yt.streams.filter(file_extension='mp4').first()
+                      if stream:
+                          out_file = stream.download(output_path='/tmp', filename='video.mp4')
+                          if os.path.exists(out_file) and os.path.getsize(out_file) >= 1000000:
+                              video_path = out_file
+                              print(f'✅ Success downloading video stream via pytubefix ({client_name})!')
+                              break
+                  except Exception as e_pytube:
+                      print(f'Pytubefix warning ({client_name}):', e_pytube)
 
           if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
               print('❌ Download failed, valid video file not found (Size < 1MB).')
