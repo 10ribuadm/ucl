@@ -61,12 +61,24 @@ jobs:
               print('❌ No Target URL specified!')
               sys.exit(1)
 
-          cookies_path = None
+          # Auto-generate fresh YouTube Netscape Session Cookies if YOUTUBE_COOKIES secret is not provided
+          cookies_path = '/tmp/yt_cookies.txt'
           if yt_cookies and yt_cookies.strip():
-              cookies_path = '/tmp/yt_cookies.txt'
               with open(cookies_path, 'w', encoding='utf-8') as cf:
                   cf.write(yt_cookies.strip())
               print('🍪 Loaded YouTube Cookies from Secrets')
+          else:
+              try:
+                  s = requests.Session()
+                  s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'}, timeout=10)
+                  lines = ['# Netscape HTTP Cookie File\n']
+                  for c in s.cookies:
+                      lines.append(f'.youtube.com\tTRUE\t/\tFALSE\t0\t{c.name}\t{c.value}\n')
+                  with open(cookies_path, 'w', encoding='utf-8') as cf:
+                      cf.writelines(lines)
+                  print('🍪 Auto-generated fresh YouTube Session Cookies successfully! (Cookies count:', len(s.cookies), ')')
+              except Exception as e_ck:
+                  print('Cookie auto-gen warning:', e_ck)
 
           video_id = None
           match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
@@ -108,19 +120,17 @@ jobs:
               except Exception as e_direct:
                   print('Direct stream download error:', e_direct)
 
-          # Strategy A: yt-dlp with various client configs
+          # Strategy A: yt-dlp with Session Cookies & Client strategies
           if not video_path:
-              print('📥 Downloading video stream via yt-dlp...')
+              print('📥 Downloading video stream via yt-dlp with session cookies...')
               commands_to_try = []
 
               if video_id: # YouTube URL
-                  for client in ['android', 'tv_embedded', 'ios', 'web']:
-                      cmd = ['yt-dlp', '--js-runtimes', 'node', '--extractor-args', f'youtube:player_client={client}', '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s']
-                      if cookies_path: cmd.extend(['--cookies', cookies_path])
-                      cmd.append(url)
+                  for client in ['web', 'mweb', 'tv_embedded', 'ios']:
+                      cmd = ['yt-dlp', '--js-runtimes', 'node', '--cookies', cookies_path, '--extractor-args', f'youtube:player_client={client}', '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
                       commands_to_try.append(cmd)
 
-              cmd_plain = ['yt-dlp', '-f', 'best[ext=mp4]/bestvideo+bestaudio/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+              cmd_plain = ['yt-dlp', '--cookies', cookies_path, '-f', 'best[ext=mp4]/bestvideo+bestaudio/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
               commands_to_try.append(cmd_plain)
 
               for cmd in commands_to_try:
@@ -135,12 +145,11 @@ jobs:
                               os.remove(candidate)
                   if video_path: break
 
-          # Strategy B: pytubefix (Built-in YouTube PO-Token & JS Solver)
+          # Strategy B: pytubefix fallback
           if not video_path and video_id:
-              print('⚡ Retrying YouTube download via pytubefix (PO-Token Engine)...')
-              for client_name in ['WEB', 'MWEB', 'TV', 'IOS']:
+              print('⚡ Retrying YouTube download via pytubefix...')
+              for client_name in ['WEB', 'MWEB', 'TV']:
                   try:
-                      print(f'⚡ Trying pytubefix client: {client_name}')
                       from pytubefix import YouTube
                       yt = YouTube(url, client=client_name)
                       if not title or title == 'Downloaded Video':
@@ -165,8 +174,7 @@ jobs:
           print(f'✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
 
           # Extract metadata
-          meta_cmd = ['yt-dlp', '-j', '--no-playlist', url]
-          if cookies_path: meta_cmd.extend(['--cookies', cookies_path])
+          meta_cmd = ['yt-dlp', '--cookies', cookies_path, '-j', '--no-playlist', url]
           res = subprocess.run(meta_cmd, capture_output=True, text=True)
           if res.returncode == 0:
               try:
@@ -179,8 +187,7 @@ jobs:
 
           subtitles = []
           try:
-              sub_cmd = ['yt-dlp', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
-              if cookies_path: sub_cmd.extend(['--cookies', cookies_path])
+              sub_cmd = ['yt-dlp', '--cookies', cookies_path, '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
               subprocess.run(sub_cmd)
               for sub_file in os.listdir('/tmp'):
                   if sub_file.endswith('.vtt'):
