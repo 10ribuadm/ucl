@@ -26,15 +26,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 🟢 Setup Node.js JS Runtime for yt-dlp
+      - name: 🟢 Setup Node.js JS Runtime for yt-dlp & pytubefix
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: 📦 Install yt-dlp, ffmpeg & requests
+      - name: 📦 Install yt-dlp, pytubefix, ffmpeg & requests
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install -U yt-dlp requests
+          pip install -U yt-dlp pytubefix requests
 
       - name: ⚡ High-Speed Cloud Download & Telegram Cloud Vault Sync
         env:
@@ -108,7 +108,7 @@ jobs:
               except Exception as e_direct:
                   print('Direct stream download error:', e_direct)
 
-          # Fallback to yt-dlp if not downloaded
+          # Strategy A: yt-dlp with various client configs
           if not video_path:
               print('📥 Downloading video stream via yt-dlp...')
               commands_to_try = []
@@ -120,7 +120,6 @@ jobs:
                       cmd.append(url)
                       commands_to_try.append(cmd)
 
-              # Plain yt-dlp command for all URLs
               cmd_plain = ['yt-dlp', '-f', 'best[ext=mp4]/bestvideo+bestaudio/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
               commands_to_try.append(cmd_plain)
 
@@ -129,13 +128,31 @@ jobs:
                   for f in os.listdir('/tmp'):
                       if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
                           candidate = os.path.join('/tmp', f)
-                          if os.path.getsize(candidate) >= 1000000: # Valid media > 1MB
+                          if os.path.getsize(candidate) >= 1000000:
                               video_path = candidate
                               break
                           else:
-                              print(f'⚠️ Deleting invalid candidate {f} (size: {os.path.getsize(candidate)} bytes)')
                               os.remove(candidate)
                   if video_path: break
+
+          # Strategy B: pytubefix (Built-in YouTube PO-Token & JS Solver)
+          if not video_path and video_id:
+              print('⚡ Retrying YouTube download via pytubefix (PO-Token Engine)...')
+              try:
+                  from pytubefix import YouTube
+                  yt = YouTube(url, client='ANDROID')
+                  if not title or title == 'Downloaded Video':
+                      title = yt.title
+                  stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+                  if not stream:
+                      stream = yt.streams.filter(file_extension='mp4').first()
+                  if stream:
+                      out_file = stream.download(output_path='/tmp', filename='video.mp4')
+                      if os.path.exists(out_file) and os.path.getsize(out_file) >= 1000000:
+                          video_path = out_file
+                          print('✅ Success downloading video stream via pytubefix!')
+              except Exception as e_pytube:
+                  print('Pytubefix warning:', e_pytube)
 
           if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
               print('❌ Download failed, valid video file not found (Size < 1MB).')
