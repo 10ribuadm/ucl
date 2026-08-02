@@ -77,17 +77,42 @@ def fetch_free_proxies():
     print(f'🌐 Fetched {len(proxy_list)} candidate proxies.')
     return proxy_list[:25]
 
-# Strategy 1: Direct yt-dlp with Deno JS Challenge Solver
+# Load cookies if available
+cookies_path = None
+yt_cookies = os.environ.get('YOUTUBE_COOKIES', '')
+if yt_cookies and len(yt_cookies) > 50:
+    cookies_path = '/tmp/yt_cookies.txt'
+    with open(cookies_path, 'w') as cf:
+        cf.write(yt_cookies)
+    print(f'🍪 Loaded YouTube Cookies from Secrets (Length: {len(yt_cookies)} bytes)')
+
+# Build cookie args
+cookie_args = ['--cookies', cookies_path] if cookies_path else []
+
+# Strategy 1: Direct yt-dlp with multiple player_client combos + Deno JS
 print('\n⚡ Strategy #1: Direct yt-dlp + Deno JS Challenge Solver Engine...')
 yt_strategies = [
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--js-runtimes', 'deno', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+    # 1a: mediaconnect + tv (newest bypass for 2026)
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mediaconnect,tv', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1b: ios + mweb
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1c: android + mweb (original)
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1d: default client with impersonate
+    ['yt-dlp', '--js-runtimes', 'deno', '--impersonate', 'chrome', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1e: tv_embedded client  
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
 for idx, cmd in enumerate(yt_strategies):
-    print(f'--- 🔄 Trying Direct yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:6])}... ---')
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(f'--- 🔄 Trying Direct yt-dlp Strategy #{idx+1}: {" ".join(cmd[3:8])}... ---')
+    # Clean old files
+    for f in os.listdir('/tmp'):
+        if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm', '.part')):
+            os.remove(os.path.join('/tmp', f))
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if result.stdout: print(result.stdout[-500:])
+    if result.returncode != 0 and result.stderr: print('STDERR:', result.stderr[-300:])
     candidate = check_valid_video()
     if candidate:
         video_path = candidate
@@ -100,13 +125,21 @@ if not video_path:
     proxies = fetch_free_proxies()
     for p_idx, proxy in enumerate(proxies):
         print(f'--- 🔄 Trying Proxy #{p_idx+1}: {proxy} ---')
-        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+        for f in os.listdir('/tmp'):
+            if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm', '.part')):
+                os.remove(os.path.join('/tmp', f))
+        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=mediaconnect,tv', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+        except subprocess.TimeoutExpired:
+            print(f'Proxy #{p_idx+1} timed out, skipping...')
+            continue
         candidate = check_valid_video()
         if candidate:
             video_path = candidate
             print(f'✅ Proxy-Rotated yt-dlp Strategy (Proxy #{p_idx+1}) Succeeded!')
             break
+
 
 # Strategy 3: PyTubeFix Engine
 if not video_path:
