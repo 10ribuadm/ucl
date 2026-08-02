@@ -189,14 +189,16 @@ jobs:
           if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
               try:
                   with open(thumb_path, 'rb') as tf:
-                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'Thumbnail: {title[:50]}'}, files={'photo': tf})
+                      files = {'photo': ('thumbnail.jpg', tf, 'image/jpeg')}
+                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'🖼️ Thumbnail for {title[:50]}'}, files=files)
                       if resp.status_code == 200 and resp.json().get('ok'):
                           thumb_file_id = resp.json()['result']['photo'][-1]['file_id']
                           print('🖼️ Thumbnail photo uploaded successfully! File ID:', thumb_file_id)
               except Exception as e_tp:
                   print('Thumbnail upload warning:', e_tp)
 
-          # 6. Upload Video Chunk(s) to Telegram Vault
+          # 6. Upload Video Chunk(s) to Telegram Vault as valid MP4 media
+          clean_title = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
           CHUNK_SIZE = 15 * 1024 * 1024
           parts = []
           main_file_id = None
@@ -204,15 +206,19 @@ jobs:
           with open(video_path, 'rb') as vf:
               part_idx = 0
               offset = 0
+              num_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
               while offset < file_size:
                   chunk = vf.read(CHUNK_SIZE)
                   chunk_len = len(chunk)
-                  chunk_path = f'/tmp/chunk_{part_idx}.dat'
+                  chunk_path = f'/tmp/chunk_{part_idx}.mp4'
                   with open(chunk_path, 'wb') as cf:
                       cf.write(chunk)
                   
+                  upload_filename = f\"{clean_title[:30]}.mp4\" if num_parts == 1 else f\"{clean_title[:30]}_part{part_idx+1}.mp4\"
+                  
                   with open(chunk_path, 'rb') as cf:
-                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'{title[:40]} Part {part_idx+1}'}, files={'document': cf})
+                      files = {'document': (upload_filename, cf, 'video/mp4')}
+                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:40]} (Part {part_idx+1}/{num_parts})'}, files=files)
                       if resp.status_code == 200 and resp.json().get('ok'):
                           doc = resp.json()['result']['document']
                           fid = doc['file_id']
