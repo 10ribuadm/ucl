@@ -187,10 +187,20 @@ jobs:
                       traceback.print_exc()
 
           if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-              print('\n❌ CRITICAL: Download failed, valid video file not found (Size < 1MB).')
-              if not has_custom_cookies:
-                  print('💡 TIP: YouTube blocked datacenter IP. Please add valid YOUTUBE_COOKIES secret to your GitHub repo!')
-              sys.exit(1)
+              print('\n⚠️ GitHub Actions runner IP blocked by YouTube bot check.')
+              print('🔄 Triggering VPS HayukCloud Hybrid Fallback Engine...')
+              try:
+                  fb_payload = {
+                      'status': 'fallback_vps',
+                      'url': url,
+                      'category': category,
+                      'reason': 'GitHub Actions datacenter IP bot restricted'
+                  }
+                  cb_res = requests.post(callback_url, json=fb_payload, timeout=15)
+                  print('✅ VPS Fallback Engine trigger sent successfully! Response Status:', cb_res.status_code)
+              except Exception as e_fb:
+                  print('Fallback trigger error:', e_fb)
+              sys.exit(0)
 
           file_size = os.path.getsize(video_path)
           print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
