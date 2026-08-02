@@ -55,8 +55,18 @@ jobs:
               sys.exit(1)
 
           print('📥 Extracting metadata & downloading via yt-dlp high-speed...')
-          dl_cmd = ['yt-dlp', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', '--no-playlist', '-o', '/tmp/video.%(ext)s', '--write-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--write-thumbnail', '--convert-thumbnails', 'jpg', url]
-          subprocess.run(dl_cmd, check=True)
+          dl_cmd = ['yt-dlp', '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+          subprocess.run(dl_cmd)
+
+          try:
+              sub_cmd = ['yt-dlp', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              subprocess.run(sub_cmd)
+          except Exception as e_sub: pass
+
+          try:
+              thumb_cmd = ['yt-dlp', '--write-thumbnail', '--convert-thumbnails', 'jpg', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              subprocess.run(thumb_cmd)
+          except Exception as e_thumb: pass
 
           video_path = None
           for f in os.listdir('/tmp'):
@@ -82,9 +92,11 @@ jobs:
           for sub_file in os.listdir('/tmp'):
               if sub_file.endswith('.vtt'):
                   lang = 'id' if '.id.' in sub_file else 'en'
-                  with open(os.path.join('/tmp', sub_file), 'r', encoding='utf-8', errors='ignore') as sf:
-                      vtt_content = sf.read()
-                      subtitles.append({'lang': lang, 'label': 'Indonesian' if lang=='id' else 'English', 'vttData': vtt_content})
+                  try:
+                      with open(os.path.join('/tmp', sub_file), 'r', encoding='utf-8', errors='ignore') as sf:
+                          vtt_content = sf.read()
+                          subtitles.append({'lang': lang, 'label': 'Indonesian' if lang=='id' else 'English', 'vttData': vtt_content})
+                  except Exception as e_sf: pass
 
           thumb_path = None
           for tf in os.listdir('/tmp'):
@@ -94,10 +106,12 @@ jobs:
 
           thumb_file_id = None
           if thumb_path:
-              with open(thumb_path, 'rb') as tf:
-                  resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'Thumbnail: {title[:50]}'}, files={'photo': tf})
-                  if resp.status_code == 200:
-                      thumb_file_id = resp.json()['result']['photo'][-1]['file_id']
+              try:
+                  with open(thumb_path, 'rb') as tf:
+                      resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendPhoto', data={'chat_id': chat_id, 'caption': f'Thumbnail: {title[:50]}'}, files={'photo': tf})
+                      if resp.status_code == 200:
+                          thumb_file_id = resp.json()['result']['photo'][-1]['file_id']
+              except Exception as e_tp: pass
 
           CHUNK_SIZE = 15 * 1024 * 1024
           file_size = os.path.getsize(video_path)
@@ -145,6 +159,9 @@ jobs:
           }
 
           print('📡 Sending Completion Callback to VPS:', callback_url)
-          requests.post(callback_url, json=payload, timeout=15)
-          print('✅ Process Completed Successfully!')
+          try:
+              requests.post(callback_url, json=payload, timeout=15)
+              print('✅ Process Completed Successfully!')
+          except Exception as e_cb:
+              print('Callback warning:', e_cb)
           "
