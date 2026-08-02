@@ -53,29 +53,64 @@ def check_valid_video():
                     return candidate
     return None
 
-# Strategy 1: yt-dlp with Deno JS Challenge Solver & Multi-Client
-print('\n⚡ Strategy #1: yt-dlp + Deno JS Challenge Solver Engine...')
+def fetch_free_proxies():
+    print('🌐 Fetching free proxies to bypass YouTube datacenter IP block...')
+    proxy_list = []
+    try:
+        r = requests.get('https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=3000&country=all', timeout=5)
+        if r.status_code == 200:
+            for line in r.text.split('\n'):
+                line = line.strip()
+                if line and ':' in line:
+                    proxy_list.append(f'http://{line}')
+    except Exception as e:
+        print('ProxyScrape warning:', e)
+    try:
+        r2 = requests.get('https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt', timeout=5)
+        if r2.status_code == 200:
+            for line in r2.text.split('\n'):
+                line = line.strip()
+                if line and ':' in line:
+                    proxy_list.append(f'http://{line}')
+    except Exception as e2:
+        print('TheSpeedX warning:', e2)
+    print(f'🌐 Fetched {len(proxy_list)} candidate proxies.')
+    return proxy_list[:25]
+
+# Strategy 1: Direct yt-dlp with Deno JS Challenge Solver
+print('\n⚡ Strategy #1: Direct yt-dlp + Deno JS Challenge Solver Engine...')
 yt_strategies = [
     ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
     ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mweb', '-f', 'b/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
     ['yt-dlp', '--js-runtimes', 'deno', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
 ]
 
 for idx, cmd in enumerate(yt_strategies):
-    print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:6])}... ---')
+    print(f'--- 🔄 Trying Direct yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:6])}... ---')
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f'Strategy #{idx+1} stderr snippet:', result.stderr[:250].replace('\n', ' '))
     candidate = check_valid_video()
     if candidate:
         video_path = candidate
-        print(f'✅ Strategy #1 (yt-dlp + Deno Strategy #{idx+1}) Succeeded!')
+        print(f'✅ Direct yt-dlp Strategy #{idx+1} Succeeded!')
         break
 
-# Strategy 2: PyTubeFix Engine
+# Strategy 2: Proxy-Rotated yt-dlp Engine (Bypasses Datacenter IP Blacklist)
 if not video_path:
-    print('\n⚡ Strategy #2: PyTubeFix Engine...')
+    print('\n⚡ Strategy #2: Proxy-Rotated yt-dlp Engine...')
+    proxies = fetch_free_proxies()
+    for p_idx, proxy in enumerate(proxies):
+        print(f'--- 🔄 Trying Proxy #{p_idx+1}: {proxy} ---')
+        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+        candidate = check_valid_video()
+        if candidate:
+            video_path = candidate
+            print(f'✅ Proxy-Rotated yt-dlp Strategy (Proxy #{p_idx+1}) Succeeded!')
+            break
+
+# Strategy 3: PyTubeFix Engine
+if not video_path:
+    print('\n⚡ Strategy #3: PyTubeFix Engine...')
     for client_mode in ['ANDROID', 'MWEB']:
         try:
             print(f'Trying PyTubeFix client={client_mode}...')
@@ -92,44 +127,10 @@ if not video_path:
                 candidate = check_valid_video()
                 if candidate:
                     video_path = candidate
-                    print(f'✅ Strategy #2 (PyTubeFix {client_mode}) Succeeded!')
+                    print(f'✅ Strategy #3 (PyTubeFix {client_mode}) Succeeded!')
                     break
         except Exception as e_ptf:
             print(f'PyTubeFix client={client_mode} error:', e_ptf)
-
-# Strategy 3: Invidious API Stream Engine Fallback
-if not video_path and video_id:
-    print('\n⚡ Strategy #3: Invidious API Stream Engine...')
-    invidious_instances = [
-        "https://invidious.private.coffee",
-        "https://invidious.nerdvpn.de",
-        "https://invidious.projectsegfau.lt"
-    ]
-    for instance in invidious_instances:
-        try:
-            print(f'⚡ Trying Invidious instance: {instance}')
-            api_url = f"{instance}/api/v1/videos/{video_id}"
-            inv_res = requests.get(api_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
-            if inv_res.status_code == 200:
-                inv_data = inv_res.json()
-                if inv_data.get('title') and title == 'Downloaded Video':
-                    title = inv_data['title']
-                if inv_data.get('formatStreams'):
-                    best_str = inv_data['formatStreams'][-1]
-                    s_url = best_str['url']
-                    print("Found stream via Invidious, downloading...")
-                    dl_r = requests.get(s_url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
-                    if dl_r.status_code == 200:
-                        candidate = '/tmp/video.mp4'
-                        with open(candidate, 'wb') as vf:
-                            for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
-                                if chunk: vf.write(chunk)
-                        if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
-                            video_path = candidate
-                            print(f'✅ Strategy #3 (Invidious {instance}) Succeeded!')
-                            break
-        except Exception as e_inv:
-            print(f'Invidious instance warning ({instance}):', e_inv)
 
 if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
     print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
