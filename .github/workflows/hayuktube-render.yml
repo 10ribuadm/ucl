@@ -23,10 +23,17 @@ jobs:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Python 3.11 & FFmpeg Runtime Environment
+      - name: ⚙️ Setup Python 3.11 Runtime Environment
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: 🦕 Install Deno JavaScript Runtime Solver for yt-dlp
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.deno/bin:$PATH"
+          deno --version
 
       - name: 📦 Install High-Performance Downloader Libraries & FFmpeg
         run: |
@@ -43,6 +50,7 @@ jobs:
           CHAT_ID: ${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID || '-1003811040179' }}
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
+          export PATH="$HOME/.deno/bin:$PATH"
           echo "🚀 Processing Target URL: $TARGET_URL"
           echo "📦 Telegram Target Cloud Vault Channel: $CHAT_ID"
           python3 render_script.py

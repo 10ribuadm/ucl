@@ -53,29 +53,29 @@ def check_valid_video():
                     return candidate
     return None
 
-# Strategy 1: yt-dlp Android Player Engine (No expired cookies)
-print('\n⚡ Strategy #1: yt-dlp Android Client Engine (Clean IP)...')
+# Strategy 1: yt-dlp with Deno JS Challenge Solver & Multi-Client
+print('\n⚡ Strategy #1: yt-dlp + Deno JS Challenge Solver Engine...')
 yt_strategies = [
-    ['yt-dlp', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--extractor-args', 'youtube:player_client=android', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--extractor-args', 'youtube:player_client=mweb', '-f', 'b/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mweb', '-f', 'b/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
 ]
 
 for idx, cmd in enumerate(yt_strategies):
-    print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:5])}... ---')
+    print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[1:6])}... ---')
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f'Strategy #{idx+1} stderr snippet:', result.stderr[:250].replace('\n', ' '))
     candidate = check_valid_video()
     if candidate:
         video_path = candidate
-        print(f'✅ Strategy #1 (yt-dlp Strategy #{idx+1}) Succeeded!')
+        print(f'✅ Strategy #1 (yt-dlp + Deno Strategy #{idx+1}) Succeeded!')
         break
 
-# Strategy 2: PyTubeFix Android Engine
+# Strategy 2: PyTubeFix Engine
 if not video_path:
-    print('\n⚡ Strategy #2: PyTubeFix Android Engine...')
+    print('\n⚡ Strategy #2: PyTubeFix Engine...')
     for client_mode in ['ANDROID', 'MWEB']:
         try:
             print(f'Trying PyTubeFix client={client_mode}...')
