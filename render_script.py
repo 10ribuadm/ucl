@@ -193,11 +193,13 @@ with open(video_path, 'rb') as vf:
             files = {'document': (upload_filename, cf, 'video/mp4')}
             resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:40]} (Part {part_idx+1}/{num_parts})'}, files=files)
             if resp.status_code == 200 and resp.json().get('ok'):
-                doc = resp.json()['result']['document']
-                fid = doc['file_id']
-                msg_id = resp.json()['result']['message_id']
-                if part_idx == 0: main_file_id = fid
-                parts.append({'partIndex': part_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len})
+                res_obj = resp.json().get('result', {})
+                doc = res_obj.get('document') or res_obj.get('video')
+                if doc:
+                    fid = doc.get('file_id')
+                    msg_id = res_obj.get('message_id')
+                    if part_idx == 0: main_file_id = fid
+                    parts.append({'partIndex': part_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len})
         
         if os.path.exists(chunk_path): os.remove(chunk_path)
         offset += chunk_len
