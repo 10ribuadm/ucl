@@ -19,27 +19,13 @@ if not url:
 
 # 1. Cookie Sanitization & Setup
 cookies_path = '/tmp/yt_cookies.txt'
-has_custom_cookies = False
 if yt_cookies and yt_cookies.strip():
     cookie_content = yt_cookies.strip().replace('\r\n', '\n')
     if not cookie_content.startswith('# Netscape'):
         cookie_content = '# Netscape HTTP Cookie File\n' + cookie_content
     with open(cookies_path, 'w', encoding='utf-8') as cf:
         cf.write(cookie_content)
-    has_custom_cookies = True
-    print('🍪 Loaded & Sanitized YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
-else:
-    try:
-        s = requests.Session()
-        s.get('https://www.youtube.com', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, timeout=10)
-        lines = ['# Netscape HTTP Cookie File\n']
-        for c in s.cookies:
-            lines.append(f'.youtube.com\tTRUE\t/\tFALSE\t0\t{c.name}\t{c.value}\n')
-        with open(cookies_path, 'w', encoding='utf-8') as cf:
-            cf.writelines(lines)
-        print('🍪 Auto-generated fresh YouTube Session Cookies (Count:', len(s.cookies), ')')
-    except Exception as e_ck:
-        print('Cookie auto-gen warning:', e_ck)
+    print('🍪 Loaded YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
 
 video_id = None
 match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
@@ -69,39 +55,103 @@ if video_id:
 
 video_path = None
 
-# Strategy A: Multi-Client & Impersonate yt-dlp Execution
-print('📥 Executing yt-dlp multi-strategy download engine...')
-strategies = [
-    ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=mweb,ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
-]
-
-for idx, cmd in enumerate(strategies):
-    print(f'\n--- 🔄 Trying Strategy #{idx+1}: {" ".join(cmd[:6])}... ---')
-    result = subprocess.run(cmd, capture_output=True, text=True)
+def check_valid_video():
     if os.path.exists('/tmp'):
         for f in os.listdir('/tmp'):
             if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
                 candidate = os.path.join('/tmp', f)
-                file_sz = os.path.getsize(candidate)
-                if file_sz >= 1000000:
-                    video_path = candidate
-                    break
-    if video_path:
-        print(f'✅ Successfully downloaded video stream with Strategy #{idx+1}!')
-        break
+                if os.path.getsize(candidate) >= 1000000:
+                    return candidate
+    return None
 
-# Strategy B: Invidious API Stream Engine Fallback
-if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
-    print('\n⚡ Retrying YouTube download via Invidious API Stream Engine...')
+# Strategy 1: Pytubefix Engine (High Reliability)
+print('\n⚡ Strategy #1: Pytubefix Engine...')
+try:
+    from pytubefix import YouTube
+    yt = YouTube(url, client='ANDROID')
+    if yt.title and title == 'Downloaded Video':
+        title = yt.title
+    stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+    if not stream:
+        stream = yt.streams.filter(file_extension='mp4').order_by('resolution').desc().first()
+    if stream:
+        print(f'Downloading stream ({stream.resolution}) via PyTubeFix...')
+        stream.download(output_path='/tmp', filename='video.mp4')
+        candidate = check_valid_video()
+        if candidate:
+            video_path = candidate
+            print('✅ Strategy #1 (PyTubeFix) Succeeded!')
+except Exception as e_ptf:
+    print('Strategy #1 (PyTubeFix) error:', e_ptf)
+
+# Strategy 2: Cobalt Public API Engine
+if not video_path and video_id:
+    print('\n⚡ Strategy #2: Cobalt API Engine...')
+    cobalt_instances = [
+        "https://api.cobalt.tools",
+        "https://co.wuk.sh",
+        "https://cobalt.qtfm.dev"
+    ]
+    for c_inst in cobalt_instances:
+        try:
+            print(f'Trying Cobalt instance: {c_inst}')
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+            c_payload = {
+                'url': f'https://www.youtube.com/watch?v={video_id}',
+                'videoQuality': '1080'
+            }
+            c_res = requests.post(f'{c_inst}/', json=c_payload, headers=headers, timeout=12)
+            if c_res.status_code == 200:
+                c_data = c_res.json()
+                stream_url = c_data.get('url')
+                if stream_url:
+                    print('Found stream URL from Cobalt API! Downloading file...')
+                    dl_r = requests.get(stream_url, stream=True, timeout=180, headers={'User-Agent': 'Mozilla/5.0'})
+                    if dl_r.status_code == 200:
+                        candidate = '/tmp/video.mp4'
+                        with open(candidate, 'wb') as vf:
+                            for chunk in dl_r.iter_content(chunk_size=2*1024*1024):
+                                if chunk: vf.write(chunk)
+                        if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
+                            video_path = candidate
+                            print(f'✅ Strategy #2 (Cobalt API {c_inst}) Succeeded!')
+                            break
+        except Exception as e_cob:
+            print(f'Cobalt instance ({c_inst}) warning:', e_cob)
+
+# Strategy 3: yt-dlp Multi-Client Execution (No broken impersonate)
+if not video_path:
+    print('\n⚡ Strategy #3: yt-dlp Multi-Client Engine...')
+    yt_strategies = [
+        ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+        ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=ios', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+        ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=android', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+        ['yt-dlp', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+    ]
+
+    for idx, cmd in enumerate(yt_strategies):
+        print(f'--- 🔄 Trying yt-dlp Client #{idx+1}: {" ".join(cmd[1:5])}... ---')
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f'Client #{idx+1} stderr:', result.stderr[:300])
+        candidate = check_valid_video()
+        if candidate:
+            video_path = candidate
+            print(f'✅ Strategy #3 (yt-dlp Client #{idx+1}) Succeeded!')
+            break
+
+# Strategy 4: Invidious API Stream Engine Fallback
+if not video_path and video_id:
+    print('\n⚡ Strategy #4: Invidious API Stream Engine...')
     invidious_instances = [
-        "https://invidious.nerdvpn.de",
-        "https://inv.tux.pizza",
-        "https://invidious.drgns.space",
-        "https://yt.artemislena.eu"
+        "https://invidious.private.coffee",
+        "https://yt.drgnz.club",
+        "https://vid.puffyan.us",
+        "https://invidious.nerdvpn.de"
     ]
     for instance in invidious_instances:
         try:
@@ -124,13 +174,13 @@ if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
                                 if chunk: vf.write(chunk)
                         if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
                             video_path = candidate
-                            print(f'✅ Successfully downloaded video stream via Invidious ({instance})!')
+                            print(f'✅ Strategy #4 (Invidious {instance}) Succeeded!')
                             break
         except Exception as e_inv:
             print(f'Invidious instance warning ({instance}):', e_inv)
 
 if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-    print('\n❌ All GitHub Actions Cloud Machine download strategies failed. VPS rendering is 100% disabled.')
+    print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
     sys.exit(1)
 
 file_size = os.path.getsize(video_path)
