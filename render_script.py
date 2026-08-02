@@ -139,6 +139,19 @@ if not video_path or not os.path.exists(video_path) or os.path.getsize(video_pat
 file_size = os.path.getsize(video_path)
 print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
 
+# Faststart Optimization Pass (Relocates MOOV atom to index 0 for instant 0.1s HTML5 Video playback)
+faststart_path = '/tmp/video_faststart.mp4'
+try:
+    print('⚡ Running Faststart Optimization (-movflags +faststart) for instant browser playback...')
+    fs_cmd = ['ffmpeg', '-y', '-i', video_path, '-c', 'copy', '-movflags', '+faststart', faststart_path]
+    fs_res = subprocess.run(fs_cmd, capture_output=True, text=True, timeout=60)
+    if os.path.exists(faststart_path) and os.path.getsize(faststart_path) > 1000000:
+        os.replace(faststart_path, video_path)
+        print('✅ Faststart Optimization Succeeded! (moov atom relocated to byte 0)')
+except Exception as e_fs:
+    print('Faststart warning:', e_fs)
+
+
 # Extract Duration if missing
 if duration == 0:
     try:
