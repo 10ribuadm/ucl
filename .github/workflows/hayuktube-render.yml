@@ -38,6 +38,7 @@ jobs:
           CALLBACK_URL: ${{ github.event.client_payload.callback_url || 'https://tube.hayuk.web.id/api/webhook/download-complete' }}
           BOT_TOKEN: ${{ github.event.client_payload.bot_token || secrets.TELEGRAM_BOT_TOKEN || '8899812523:AAHBTqKxaSiTWq8bRLs0tvuoktZyyc8W7ps' }}
           CHAT_ID: ${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID || '-1003811040179' }}
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
           echo "🚀 Processing Target URL: $TARGET_URL"
           echo "📦 Telegram Target Cloud Vault Channel: $CHAT_ID"
@@ -49,54 +50,73 @@ jobs:
           callback_url = os.environ.get('CALLBACK_URL')
           bot_token = os.environ.get('BOT_TOKEN')
           chat_id = os.environ.get('CHAT_ID')
+          yt_cookies = os.environ.get('YOUTUBE_COOKIES')
 
           if not url:
               print('❌ No Target URL specified!')
               sys.exit(1)
 
+          cookies_path = None
+          if yt_cookies and yt_cookies.strip():
+              cookies_path = '/tmp/yt_cookies.txt'
+              with open(cookies_path, 'w', encoding='utf-8') as cf:
+                  cf.write(yt_cookies.strip())
+              print('🍪 Loaded YouTube Cookies from Secrets')
+
           print('📥 Extracting metadata & downloading via yt-dlp high-speed...')
-          dl_cmd = [
-              'yt-dlp',
-              '--extractor-args', 'youtube:player_client=android,web',
-              '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best',
-              '--merge-output-format', 'mp4',
-              '--no-playlist',
-              '--no-check-certificates',
-              '-o', '/tmp/video.%(ext)s',
-              url
+          clients_to_try = [
+              'web_embedded,android_creator',
+              'mweb,android_vr',
+              'tv,mweb',
+              'android,web'
           ]
-          subprocess.run(dl_cmd)
 
           video_path = None
-          for f in os.listdir('/tmp'):
-              if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
-                  video_path = os.path.join('/tmp', f)
-                  break
-
-          if not video_path:
-              print('⚠️ Retrying with fallback player client iOS/TV...')
-              dl_cmd_fb = [
+          for client in clients_to_try:
+              print(f'⚡ Trying YouTube Client Strategy: {client}')
+              dl_cmd = [
                   'yt-dlp',
-                  '--extractor-args', 'youtube:player_client=ios,tv',
+                  '--extractor-args', f'youtube:player_client={client}',
+                  '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best',
+                  '--merge-output-format', 'mp4',
                   '--no-playlist',
                   '--no-check-certificates',
-                  '-o', '/tmp/video.%(ext)s',
-                  url
+                  '-o', '/tmp/video.%(ext)s'
               ]
-              subprocess.run(dl_cmd_fb)
+              if cookies_path:
+                  dl_cmd.extend(['--cookies', cookies_path])
+              dl_cmd.append(url)
+
+              subprocess.run(dl_cmd)
+
               for f in os.listdir('/tmp'):
                   if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
                       video_path = os.path.join('/tmp', f)
                       break
+              if video_path:
+                  print(f'✅ Success with client: {client}')
+                  break
 
           if not video_path:
+              print('⚠️ Retrying fallback direct HTTP stream download...')
+              try:
+                  res = requests.get(url, stream=True, timeout=60, headers={'User-Agent': 'Mozilla/5.0'})
+                  if res.status_code == 200:
+                      video_path = '/tmp/video.mp4'
+                      with open(video_path, 'wb') as vf:
+                          for chunk in res.iter_content(chunk_size=1024*1024):
+                              if chunk: vf.write(chunk)
+              except Exception as e_http: pass
+
+          if not video_path or not os.path.exists(video_path):
               print('❌ Download failed, video file not found.')
               sys.exit(1)
 
           print(f'✅ Downloaded video to {video_path} (Size: {os.path.getsize(video_path)} bytes)')
 
-          meta_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=android,web', '-j', '--no-playlist', url]
+          meta_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=web_embedded', '-j', '--no-playlist', url]
+          if cookies_path: meta_cmd.extend(['--cookies', cookies_path])
           res = subprocess.run(meta_cmd, capture_output=True, text=True)
           meta = json.loads(res.stdout) if res.returncode == 0 else {}
 
@@ -106,7 +126,8 @@ jobs:
 
           subtitles = []
           try:
-              sub_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=android,web', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              sub_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=web_embedded', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              if cookies_path: sub_cmd.extend(['--cookies', cookies_path])
               subprocess.run(sub_cmd)
               for sub_file in os.listdir('/tmp'):
                   if sub_file.endswith('.vtt'):
@@ -118,7 +139,8 @@ jobs:
 
           thumb_path = None
           try:
-              thumb_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=android,web', '--write-thumbnail', '--convert-thumbnails', 'jpg', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              thumb_cmd = ['yt-dlp', '--extractor-args', 'youtube:player_client=web_embedded', '--write-thumbnail', '--convert-thumbnails', 'jpg', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              if cookies_path: thumb_cmd.extend(['--cookies', cookies_path])
               subprocess.run(thumb_cmd)
               for tf in os.listdir('/tmp'):
                   if tf.startswith('video.') and tf.endswith(('.jpg', '.png', '.webp')):
