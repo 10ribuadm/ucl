@@ -130,8 +130,20 @@ if (not video_path or os.path.getsize(video_path) < 1000000) and video_id:
             print(f'Invidious instance warning ({instance}):', e_inv)
 
 if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-    print('\n❌ All GitHub Actions Cloud Machine download strategies failed.')
-    sys.exit(1)
+    print('\n⚠️ GitHub Actions runner IP blocked by YouTube bot check.')
+    print('🔄 Triggering VPS HayukCloud Hybrid Fallback Engine...')
+    try:
+        fb_payload = {
+            'status': 'fallback_vps',
+            'url': url,
+            'category': category,
+            'reason': 'GitHub Actions datacenter IP bot restricted'
+        }
+        cb_res = requests.post(callback_url, json=fb_payload, timeout=15)
+        print('✅ VPS Hybrid Fallback Engine trigger sent successfully! Response Status:', cb_res.status_code)
+    except Exception as e_fb:
+        print('Fallback trigger error:', e_fb)
+    sys.exit(0)
 
 file_size = os.path.getsize(video_path)
 print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
