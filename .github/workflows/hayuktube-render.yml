@@ -68,7 +68,6 @@ jobs:
                   cf.write(yt_cookies.strip())
               print('🍪 Loaded YouTube Cookies from Secrets')
 
-          # 1. Extract Video ID & Title/Thumbnail via YouTube oEmbed API (100% Fail-Proof)
           video_id = None
           match = re.search(r'(?:v=|\/|shorts\/)([0-9A-Za-z_-]{11})', url)
           if match:
@@ -87,61 +86,66 @@ jobs:
                       o_data = oembed_resp.json()
                       if o_data.get('title'): title = o_data['title']
                       if o_data.get('author_name'): description = f\"Channel: {o_data['author_name']}\nSource: {url}\"
-              except Exception as e_oembed: pass
-
-          # 2. Download Video Stream via yt-dlp JS-Enabled Strategies
-          print('📥 Downloading video stream via yt-dlp high-speed...')
-          clients_to_try = [
-              'android',
-              'tv_embedded',
-              'ios',
-              'web_embedded,android_creator',
-              'mweb,android_vr'
-          ]
+              except Exception: pass
 
           video_path = None
-          for client in clients_to_try:
-              print(f'⚡ Trying YouTube Client Strategy: {client}')
-              dl_cmd = [
-                  'yt-dlp',
-                  '--js-runtimes', 'node',
-                  '--extractor-args', f'youtube:player_client={client}',
-                  '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best',
-                  '--merge-output-format', 'mp4',
-                  '--no-playlist',
-                  '--no-check-certificates',
-                  '-o', '/tmp/video.%(ext)s'
-              ]
-              if cookies_path:
-                  dl_cmd.extend(['--cookies', cookies_path])
-              dl_cmd.append(url)
 
-              subprocess.run(dl_cmd)
-
-              for f in os.listdir('/tmp'):
-                  if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
-                      candidate = os.path.join('/tmp', f)
-                      if os.path.getsize(candidate) >= 2 * 1024 * 1024:
+          # Check if URL is a direct MP4/video link
+          if any(url.lower().endswith(ext) or ext+'?' in url.lower() for ext in ['.mp4', '.mkv', '.webm', '.mov']):
+              print('⚡ Direct Video File URL detected, streaming directly...')
+              try:
+                  res = requests.get(url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
+                  if res.status_code == 200:
+                      candidate = '/tmp/video.mp4'
+                      with open(candidate, 'wb') as vf:
+                          for chunk in res.iter_content(chunk_size=2*1024*1024):
+                              if chunk: vf.write(chunk)
+                      if os.path.exists(candidate) and os.path.getsize(candidate) >= 1000000:
                           video_path = candidate
-                          break
-                      else:
-                          print(f'⚠️ Ignoring candidate {f} because size is too small ({os.path.getsize(candidate)} bytes)')
-                          os.remove(candidate)
+                          url_filename = os.path.basename(url.split('?')[0])
+                          if url_filename and len(url_filename) > 3 and title == 'Downloaded Video':
+                              title = url_filename
+              except Exception as e_direct:
+                  print('Direct stream download error:', e_direct)
 
-              if video_path:
-                  print(f'✅ Success downloading valid video stream with client: {client}')
-                  break
+          # Fallback to yt-dlp if not downloaded
+          if not video_path:
+              print('📥 Downloading video stream via yt-dlp...')
+              commands_to_try = []
 
-          if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 2 * 1024 * 1024:
-              print('❌ Download failed, valid video stream file not found (Size < 2MB).')
+              if video_id: # YouTube URL
+                  for client in ['android', 'tv_embedded', 'ios', 'web']:
+                      cmd = ['yt-dlp', '--js-runtimes', 'node', '--extractor-args', f'youtube:player_client={client}', '-f', 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s']
+                      if cookies_path: cmd.extend(['--cookies', cookies_path])
+                      cmd.append(url)
+                      commands_to_try.append(cmd)
+
+              # Plain yt-dlp command for all URLs
+              cmd_plain = ['yt-dlp', '-f', 'best[ext=mp4]/bestvideo+bestaudio/best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
+              commands_to_try.append(cmd_plain)
+
+              for cmd in commands_to_try:
+                  subprocess.run(cmd)
+                  for f in os.listdir('/tmp'):
+                      if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
+                          candidate = os.path.join('/tmp', f)
+                          if os.path.getsize(candidate) >= 1000000: # Valid media > 1MB
+                              video_path = candidate
+                              break
+                          else:
+                              print(f'⚠️ Deleting invalid candidate {f} (size: {os.path.getsize(candidate)} bytes)')
+                              os.remove(candidate)
+                  if video_path: break
+
+          if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
+              print('❌ Download failed, valid video file not found (Size < 1MB).')
               sys.exit(1)
 
           file_size = os.path.getsize(video_path)
           print(f'✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
 
-          # 3. Extract Metadata & Duration via yt-dlp
-          meta_cmd = ['yt-dlp', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android', '-j', '--no-playlist', url]
+          # Extract metadata
+          meta_cmd = ['yt-dlp', '-j', '--no-playlist', url]
           if cookies_path: meta_cmd.extend(['--cookies', cookies_path])
           res = subprocess.run(meta_cmd, capture_output=True, text=True)
           if res.returncode == 0:
@@ -153,10 +157,9 @@ jobs:
                   if meta.get('thumbnail'): thumb_url = meta['thumbnail']
               except Exception: pass
 
-          # 4. Fetch Subtitles (if any)
           subtitles = []
           try:
-              sub_cmd = ['yt-dlp', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
+              sub_cmd = ['yt-dlp', '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
               if cookies_path: sub_cmd.extend(['--cookies', cookies_path])
               subprocess.run(sub_cmd)
               for sub_file in os.listdir('/tmp'):
@@ -165,9 +168,8 @@ jobs:
                       with open(os.path.join('/tmp', sub_file), 'r', encoding='utf-8', errors='ignore') as sf:
                           vtt_content = sf.read()
                           subtitles.append({'lang': lang, 'label': 'Indonesian' if lang=='id' else 'English', 'vttData': vtt_content})
-          except Exception as e_sf: pass
+          except Exception: pass
 
-          # 5. Fetch HD Thumbnail Cover & Upload to Telegram as Photo
           thumb_file_id = None
           thumb_path = '/tmp/thumbnail.jpg'
 
@@ -177,7 +179,7 @@ jobs:
                   if t_res.status_code == 200:
                       with open(thumb_path, 'wb') as tf:
                           tf.write(t_res.content)
-              except Exception as e_th_dl: pass
+              except Exception: pass
 
           if not os.path.exists(thumb_path) or os.path.getsize(thumb_path) == 0:
               if video_id:
@@ -199,7 +201,6 @@ jobs:
               except Exception as e_tp:
                   print('Thumbnail upload warning:', e_tp)
 
-          # 6. Upload Video Chunk(s) to Telegram Vault as valid MP4 media
           clean_title = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
           CHUNK_SIZE = 15 * 1024 * 1024
           parts = []
