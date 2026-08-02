@@ -26,20 +26,15 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 🟢 Setup Node.js Runtime
+      - name: 🟢 Setup Node.js Runtime for yt-dlp
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: 🦕 Setup Deno Native JS Runtime for yt-dlp
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: 📦 Install yt-dlp, pytubefix, ffmpeg & requests
+      - name: 📦 Install yt-dlp, curl-cffi, pytubefix, ffmpeg & requests
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install -U yt-dlp pytubefix requests
+          pip install -U yt-dlp curl-cffi pytubefix requests
 
       - name: ⚡ High-Speed Cloud Download & Telegram Cloud Vault Sync
         env:
@@ -53,7 +48,7 @@ jobs:
           echo "🚀 Processing Target URL: $TARGET_URL"
           echo "📦 Telegram Target Cloud Vault Channel: $CHAT_ID"
           python -c "
-          import os, sys, json, subprocess, requests, re
+          import os, sys, json, subprocess, requests, re, traceback
 
           url = os.environ.get('TARGET_URL')
           category = os.environ.get('CATEGORY', 'General')
@@ -66,13 +61,16 @@ jobs:
               print('❌ No Target URL specified!')
               sys.exit(1)
 
+          # 1. Cookie Sanitization & Setup
           cookies_path = '/tmp/yt_cookies.txt'
+          has_custom_cookies = False
           if yt_cookies and yt_cookies.strip():
               cookie_content = yt_cookies.strip().replace('\r\n', '\n')
               if not cookie_content.startswith('# Netscape'):
                   cookie_content = '# Netscape HTTP Cookie File\n' + cookie_content
               with open(cookies_path, 'w', encoding='utf-8') as cf:
                   cf.write(cookie_content)
+              has_custom_cookies = True
               print('🍪 Loaded & Sanitized YouTube Cookies from Secrets (Length:', len(cookie_content), 'bytes)')
           else:
               try:
@@ -109,7 +107,7 @@ jobs:
 
           video_path = None
 
-          # Check direct MP4/video URL
+          # Check direct MP4/video link
           if any(url.lower().endswith(ext) or ext+'?' in url.lower() for ext in ['.mp4', '.mkv', '.webm', '.mov']):
               print('⚡ Direct Video File URL detected, streaming directly...')
               try:
@@ -127,32 +125,52 @@ jobs:
               except Exception as e_direct:
                   print('Direct stream download error:', e_direct)
 
-          # Strategy A: yt-dlp with Deno JS Solver & Netscape Cookies
+          # Strategy A: Multi-Client & Impersonate yt-dlp Execution
           if not video_path:
-              print('📥 Downloading video stream via yt-dlp with Deno JS Solver & Netscape cookies...')
-              commands_to_try = [
-                  ['yt-dlp', '--cookies', cookies_path, '-f', 'bestvideo[height<=1080]+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
-                  ['yt-dlp', '--cookies', cookies_path, '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+              print('📥 Executing yt-dlp multi-strategy download engine...')
+              strategies = [
+                  # 1. Impersonate Chrome + Android Client
+                  ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=android', '-f', 'bestvideo[height<=1080]+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  # 2. Impersonate Chrome + WEB Client
+                  ['yt-dlp', '--cookies', cookies_path, '--impersonate', 'chrome', '--extractor-args', 'youtube:player_client=web', '-f', 'bestvideo[height<=1080]+bestaudio/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  # 3. Android Client + Plain
+                  ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=android', '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  # 4. IOS / MWEB Client
+                  ['yt-dlp', '--cookies', cookies_path, '--extractor-args', 'youtube:player_client=mweb,ios', '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url],
+                  # 5. Fallback Best Format
                   ['yt-dlp', '-f', 'best', '--no-playlist', '--no-check-certificates', '-o', '/tmp/video.%(ext)s', url]
               ]
 
-              for cmd in commands_to_try:
-                  subprocess.run(cmd)
+              for idx, cmd in enumerate(strategies):
+                  print(f'\n--- 🔄 Trying Strategy #{idx+1}: {\" \".join(cmd[:6])}... ---')
+                  result = subprocess.run(cmd, capture_output=True, text=True)
+                  print('--- [STDOUT] ---')
+                  print(result.stdout if result.stdout else '(empty stdout)')
+                  print('--- [STDERR] ---')
+                  print(result.stderr if result.stderr else '(empty stderr)')
+                  print(f'--- Exit Code: {result.returncode} ---')
+
                   for f in os.listdir('/tmp'):
                       if f.startswith('video.') and f.endswith(('.mp4', '.mkv', '.webm')):
                           candidate = os.path.join('/tmp', f)
-                          if os.path.getsize(candidate) >= 1000000:
+                          file_sz = os.path.getsize(candidate)
+                          print(f'🔍 Found candidate file: {f} (Size: {file_sz} bytes / {(file_sz/(1024*1024)):.2f} MB)')
+                          if file_sz >= 1000000:
                               video_path = candidate
                               break
                           else:
+                              print(f'⚠️ Deleting tiny candidate {f} (size too small: {file_sz} bytes)')
                               os.remove(candidate)
-                  if video_path: break
+                  if video_path:
+                      print(f'✅ Successfully downloaded video stream with Strategy #{idx+1}!')
+                      break
 
-          # Strategy B: pytubefix fallback
+          # Strategy B: Pytubefix Fallback with Detailed Diagnostics
           if not video_path and video_id:
-              print('⚡ Retrying YouTube download via pytubefix...')
-              for client_name in ['WEB', 'MWEB', 'TV']:
+              print('\n⚡ Retrying YouTube download via pytubefix fallback engine...')
+              for client_name in ['ANDROID', 'WEB', 'MWEB', 'TV']:
                   try:
+                      print(f'⚡ Trying pytubefix client: {client_name}')
                       from pytubefix import YouTube
                       yt = YouTube(url, client=client_name)
                       if not title or title == 'Downloaded Video':
@@ -166,15 +184,18 @@ jobs:
                               break
                   except Exception as e_pytube:
                       print(f'Pytubefix warning ({client_name}):', e_pytube)
+                      traceback.print_exc()
 
           if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 1000000:
-              print('❌ Download failed, valid video file not found (Size < 1MB).')
+              print('\n❌ CRITICAL: Download failed, valid video file not found (Size < 1MB).')
+              if not has_custom_cookies:
+                  print('💡 TIP: YouTube blocked datacenter IP. Please add valid YOUTUBE_COOKIES secret to your GitHub repo!')
               sys.exit(1)
 
           file_size = os.path.getsize(video_path)
-          print(f'✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
+          print(f'\n✅ Downloaded valid video to {video_path} (Size: {file_size} bytes / {(file_size/(1024*1024)):.2f} MB)')
 
-          # Extract metadata
+          # 3. Extract Metadata & Duration
           meta_cmd = ['yt-dlp', '--cookies', cookies_path, '-j', '--no-playlist', url]
           res = subprocess.run(meta_cmd, capture_output=True, text=True)
           if res.returncode == 0:
@@ -189,7 +210,7 @@ jobs:
           subtitles = []
           try:
               sub_cmd = ['yt-dlp', '--cookies', cookies_path, '--write-sub', '--write-auto-sub', '--sub-lang', 'id,en', '--convert-subs', 'vtt', '--skip-download', '--no-playlist', '-o', '/tmp/video.%(ext)s', url]
-              subprocess.run(sub_cmd)
+              subprocess.run(sub_cmd, capture_output=True, text=True)
               for sub_file in os.listdir('/tmp'):
                   if sub_file.endswith('.vtt'):
                       lang = 'id' if '.id.' in sub_file else 'en'
