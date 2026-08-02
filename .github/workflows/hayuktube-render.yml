@@ -36,10 +36,11 @@ jobs:
           TARGET_URL: ${{ github.event.client_payload.url || github.event.inputs.video_url }}
           CATEGORY: ${{ github.event.client_payload.category || github.event.inputs.category }}
           CALLBACK_URL: ${{ github.event.client_payload.callback_url || 'https://tube.hayuk.web.id/api/webhook/download-complete' }}
-          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '7850550058:AAHshYnSff8Q_752qgM-yS5Uv-S5q2J-c0Q' }}
-          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || '-1002425022830' }}
+          BOT_TOKEN: ${{ github.event.client_payload.bot_token || secrets.TELEGRAM_BOT_TOKEN || '8899812523:AAHBTqKxaSiTWq8bRLs0tvuoktZyyc8W7ps' }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID || '-1003811040179' }}
         run: |
           echo "🚀 Processing Target URL: $TARGET_URL"
+          echo "📦 Telegram Target Cloud Vault Channel: $CHAT_ID"
           python -c "
           import os, sys, json, subprocess, requests
 
