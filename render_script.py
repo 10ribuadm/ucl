@@ -296,12 +296,11 @@ def upload_file_to_telegram(fpath, caption_label):
 # Multi-Quality Transcoding Dictionary
 qualities = {}
 
-# Transcode & Upload lower resolutions FIRST (144p, 240p, 360p, 720p) so lightweight versions are available immediately!
+# Transcode & Upload lower resolutions (240p, 360p, 720p) so lightweight versions are available immediately!
 target_resolutions = [
-    {'label': '144p', 'height': 144, 'bitrate': '120k'},
     {'label': '240p', 'height': 240, 'bitrate': '250k'},
-    {'label': '360p', 'height': 360, 'bitrate': '400k'},
-    {'label': '720p', 'height': 720, 'bitrate': '1200k'}
+    {'label': '360p', 'height': 360, 'bitrate': '450k'},
+    {'label': '720p', 'height': 720, 'bitrate': '1400k'}
 ]
 
 for target in target_resolutions:
@@ -312,17 +311,17 @@ for target in target_resolutions:
     
     print(f'\n⚡ [FFmpeg Cloud Transcoder] Rendering {q_label} variant (height={q_height}, bitrate={q_bitrate})...')
     ff_cmd = [
-        'ffmpeg', '-y', '-i', video_path,
-        '-vf', f'scale=-2:{q_height}',
-        '-c:v', 'libx264', '-preset', 'ultrafast',
-        '-b:v', q_bitrate,
+        'ffmpeg', '-y', '-threads', '0', '-i', video_path,
+        '-vf', f'scale=-2:{q_height}:flags=bicubic',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'fastdecode',
+        '-b:v', q_bitrate, '-maxrate', q_bitrate, '-bufsize', '2M',
         '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-b:a', '96k',
         '-movflags', '+faststart',
         out_variant
     ]
     try:
-        res_ff = subprocess.run(ff_cmd, capture_output=True, text=True, timeout=600)
+        res_ff = subprocess.run(ff_cmd, capture_output=True, text=True, timeout=3600)
         if res_ff.returncode != 0 and res_ff.stderr:
             print(f'⚠️ FFmpeg {q_label} STDERR:', res_ff.stderr[-500:])
         
