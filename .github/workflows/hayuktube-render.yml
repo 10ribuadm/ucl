@@ -28,6 +28,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: 🛡️ Setup Cloudflare WARP Network Bypass (Bypass Datacenter IP Block)
+        uses: fscarmen/warp-on-actions@v1.3.0
+
       - name: 🦕 Install Deno JavaScript Runtime Solver for yt-dlp
         run: |
           curl -fsSL https://deno.land/install.sh | sh
