@@ -341,10 +341,12 @@ def upload_file_to_telegram(fpath, caption_label):
 # Multi-Quality Transcoding Dictionary
 qualities = {}
 
-# Transcode & Upload lower resolutions (240p, 360p, 720p) ONLY IF NOT ALREADY IN VAULT!
+# Transcode & Upload lower resolutions (144p, 240p, 360p, 480p, 720p) ONLY IF NOT ALREADY IN VAULT!
 target_resolutions = [
+    {'label': '144p', 'height': 144, 'bitrate': '120k'},
     {'label': '240p', 'height': 240, 'bitrate': '250k'},
     {'label': '360p', 'height': 360, 'bitrate': '450k'},
+    {'label': '480p', 'height': 480, 'bitrate': '800k'},
     {'label': '720p', 'height': 720, 'bitrate': '1400k'}
 ]
 
@@ -353,7 +355,7 @@ def send_incremental_callback(current_qualities):
     if not callback_url: return
     best_fid = None
     best_parts = []
-    for q_k in ['1080p', '720p', '360p', '240p']:
+    for q_k in ['1080p', '720p', '480p', '360p', '240p', '144p']:
         if q_k in current_qualities and current_qualities[q_k].get('fileId'):
             best_fid = current_qualities[q_k]['fileId']
             best_parts = current_qualities[q_k].get('parts', [])
