@@ -321,6 +321,40 @@ target_resolutions = [
     {'label': '720p', 'height': 720, 'bitrate': '1400k'}
 ]
 
+# Helper function to send incremental callbacks to VPS after each resolution is ready
+def send_incremental_callback(current_qualities):
+    if not callback_url: return
+    best_fid = None
+    best_parts = []
+    for q_k in ['1080p', '720p', '360p', '240p']:
+        if q_k in current_qualities and current_qualities[q_k].get('fileId'):
+            best_fid = current_qualities[q_k]['fileId']
+            best_parts = current_qualities[q_k].get('parts', [])
+            break
+    if not best_fid: return
+    payload = {
+        'status': 'success',
+        'media': {
+            'title': title,
+            'description': description[:500],
+            'category': category,
+            'duration': duration,
+            'fileSize': file_size,
+            'fileType': 'video',
+            'mimeType': 'video/mp4',
+            'fileId': best_fid,
+            'thumbnailFileId': thumb_file_id or best_fid,
+            'parts': best_parts,
+            'qualities': current_qualities,
+            'subtitles': subtitles
+        }
+    }
+    try:
+        cb_res = requests.post(callback_url, json=payload, timeout=15)
+        print(f'📡 Incremental Callback ({list(current_qualities.keys())}) sent to VPS! Status: {cb_res.status_code}')
+    except Exception as e_cb:
+        print('Incremental Callback warning:', e_cb)
+
 for target in target_resolutions:
     q_label = target['label']
     if q_label in existing_qualities and existing_qualities[q_label].get('fileId'):
@@ -357,6 +391,7 @@ for target in target_resolutions:
                     'parts': var_parts
                 }
                 print(f'✅ {q_label} variant rendered & uploaded successfully! File Size: {(var_size/(1024*1024)):.2f} MB')
+                send_incremental_callback(qualities)
             if os.path.exists(out_variant): os.remove(out_variant)
         else:
             print(f'⚠️ {q_label} transcoding generated invalid/empty file.')
@@ -378,28 +413,7 @@ else:
         'parts': parts
     }
 
-payload = {
-    'status': 'success',
-    'media': {
-        'title': title,
-        'description': description[:500],
-        'category': category,
-        'duration': duration,
-        'fileSize': file_size,
-        'fileType': 'video',
-        'mimeType': 'video/mp4',
-        'fileId': main_file_id,
-        'thumbnailFileId': thumb_file_id or main_file_id,
-        'parts': parts,
-        'qualities': qualities,
-        'subtitles': subtitles
-    }
-}
-
-print('📡 Sending Completion Callback to VPS:', callback_url)
-try:
-    cb_res = requests.post(callback_url, json=payload, timeout=15)
-    print('✅ Process Completed Successfully! Callback status:', cb_res.status_code)
-except Exception as e_cb:
-    print('Callback warning:', e_cb)
+print('📡 Sending Final Completion Callback to VPS...')
+send_incremental_callback(qualities)
+print('✅ Process Completed Successfully!')
 
