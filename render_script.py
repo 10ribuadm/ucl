@@ -6,6 +6,8 @@ import requests
 import re
 import traceback
 
+import time
+
 url = os.environ.get('TARGET_URL')
 category = os.environ.get('CATEGORY', 'General')
 callback_url = os.environ.get('CALLBACK_URL')
@@ -25,6 +27,26 @@ title = 'Downloaded Video'
 description = f'Source: {url}'
 duration = 0
 thumb_url = None
+
+def log_progress(stage, percent, message):
+    print(f'[{percent}%] [{stage}] {message}')
+    if not callback_url: return
+    try:
+        base_api = callback_url.split('/api/')[0]
+        log_url = f'{base_api}/api/render-log'
+        log_payload = {
+            'url': url,
+            'title': title,
+            'stage': stage,
+            'percent': percent,
+            'message': message,
+            'timestamp': int(time.time() * 1000)
+        }
+        requests.post(log_url, json=log_payload, timeout=5)
+    except Exception:
+        pass
+
+log_progress('initializing', 5, f'🚀 Cloud Worker Initialized for {url}')
 
 if video_id:
     thumb_url = f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
@@ -357,8 +379,11 @@ def send_incremental_callback(current_qualities):
 
 for target in target_resolutions:
     q_label = target['label']
+    pct_map = {'240p': 35, '360p': 55, '720p': 75}
+    curr_pct = pct_map.get(q_label, 50)
+
     if q_label in existing_qualities and existing_qualities[q_label].get('fileId'):
-        print(f'⏩ [Skip Render] Quality {q_label} ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
+        log_progress(f'skip_{q_label}', curr_pct, f'⏩ Quality {q_label} ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
         qualities[q_label] = existing_qualities[q_label]
         continue
 
@@ -366,7 +391,7 @@ for target in target_resolutions:
     q_bitrate = target['bitrate']
     out_variant = f'/tmp/video_{q_label}.mp4'
     
-    print(f'\n⚡ [FFmpeg Cloud Transcoder] Rendering {q_label} variant (height={q_height}, bitrate={q_bitrate})...')
+    log_progress(f'rendering_{q_label}', curr_pct, f'⚡ [FFmpeg Cloud Transcoder] Rendering {q_label} variant (height={q_height}, bitrate={q_bitrate})...')
     ff_cmd = [
         'ffmpeg', '-y', '-threads', '0', '-i', video_path,
         '-vf', f'scale=-2:{q_height}:flags=bicubic',
@@ -383,6 +408,7 @@ for target in target_resolutions:
             print(f'⚠️ FFmpeg {q_label} STDERR:', res_ff.stderr[-500:])
         
         if os.path.exists(out_variant) and os.path.getsize(out_variant) > 50000:
+            log_progress(f'uploading_{q_label}', curr_pct + 5, f'📦 Uploading {q_label} variant to Telegram Cloud Vault...')
             var_fid, var_size, var_parts = upload_file_to_telegram(out_variant, q_label)
             if var_fid:
                 qualities[q_label] = {
@@ -390,22 +416,22 @@ for target in target_resolutions:
                     'fileSize': var_size,
                     'parts': var_parts
                 }
-                print(f'✅ {q_label} variant rendered & uploaded successfully! File Size: {(var_size/(1024*1024)):.2f} MB')
+                log_progress(f'ready_{q_label}', curr_pct + 8, f'✅ {q_label} variant ready! {(var_size/(1024*1024)):.2f} MB uploaded to Vault.')
                 send_incremental_callback(qualities)
             if os.path.exists(out_variant): os.remove(out_variant)
         else:
-            print(f'⚠️ {q_label} transcoding generated invalid/empty file.')
+            log_progress(f'warning_{q_label}', curr_pct, f'⚠️ {q_label} transcoding generated invalid/empty file.')
     except Exception as e_q:
-        print(f'Transcode warning for {q_label}:', e_q)
+        log_progress(f'error_{q_label}', curr_pct, f'Transcode warning for {q_label}: {e_q}')
 
 # Upload Master 1080p Video (skip if already exists)
 if '1080p' in existing_qualities and existing_qualities['1080p'].get('fileId'):
-    print('⏩ [Skip Upload] Master 1080p Video ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
+    log_progress('skip_1080p', 95, '⏩ Master 1080p Video ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
     qualities['1080p'] = existing_qualities['1080p']
     main_file_id = existing_qualities['1080p']['fileId']
     parts = existing_qualities['1080p'].get('parts', [])
 else:
-    print('\n📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
+    log_progress('uploading_1080p', 90, '📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
     main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
     qualities['1080p'] = {
         'fileId': main_file_id,
@@ -413,7 +439,6 @@ else:
         'parts': parts
     }
 
-print('📡 Sending Final Completion Callback to VPS...')
+log_progress('completed', 100, '🎉 Cloud Render Complete! All qualities are live on HayukTube!')
 send_incremental_callback(qualities)
-print('✅ Process Completed Successfully!')
 
