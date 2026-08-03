@@ -126,8 +126,8 @@ def clean_tmp_videos():
 # STRATEGY 1: Direct yt-dlp + Fresh Cookies + Indonesian Audio Dubbing Priority
 # =====================================================
 print('\n⚡ Strategy #1: Direct yt-dlp Engine with Cookies (Full HD 1080p Target & Indonesian Dubbed Audio)...')
-# Prioritize Indonesian Dubbing: ba[language=id]/ba[language^=id]/ba[language=ind]
-fmt_format = 'bv*[height<=1080]+ba[language=id]/ba[language^=id]/ba[language=ind]/ba/b[height<=1080]/best'
+# Prioritize Video + Audio streams (Never select standalone audio-only)
+fmt_format = 'bv*[height<=1080]+ba[language=id]/bv*[height<=1080]+ba/b[height<=1080]/bestvideo+bestaudio/best'
 lang_args = ['--extractor-args', 'youtube:lang=id', '--add-header', 'Accept-Language:id-ID,id;q=0.9,en;q=0.8']
 
 yt_strategies = [
