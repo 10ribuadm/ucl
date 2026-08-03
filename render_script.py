@@ -285,24 +285,14 @@ def upload_file_to_telegram(fpath, caption_label):
             
     return first_fid, fsize, part_list
 
-# Upload Master 1080p Video
-print('📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
-main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
-
 # Multi-Quality Transcoding Dictionary
-qualities = {
-    '1080p': {
-        'fileId': main_file_id,
-        'fileSize': file_size,
-        'parts': parts
-    }
-}
+qualities = {}
 
-# Transcode & Upload lower resolutions (720p, 360p, 144p)
+# Transcode & Upload lower resolutions FIRST (144p, 360p, 720p) so lightweight versions are available immediately!
 target_resolutions = [
-    {'label': '720p', 'height': 720, 'bitrate': '1200k'},
+    {'label': '144p', 'height': 144, 'bitrate': '120k'},
     {'label': '360p', 'height': 360, 'bitrate': '400k'},
-    {'label': '144p', 'height': 144, 'bitrate': '120k'}
+    {'label': '720p', 'height': 720, 'bitrate': '1200k'}
 ]
 
 for target in target_resolutions:
@@ -315,15 +305,19 @@ for target in target_resolutions:
     ff_cmd = [
         'ffmpeg', '-y', '-i', video_path,
         '-vf', f'scale=-2:{q_height}',
-        '-c:v', 'libx264', '-preset', 'superfast',
+        '-c:v', 'libx264', '-preset', 'ultrafast',
         '-b:v', q_bitrate,
+        '-pix_fmt', 'yuv420p',
         '-c:a', 'aac', '-b:a', '96k',
         '-movflags', '+faststart',
         out_variant
     ]
     try:
-        res_ff = subprocess.run(ff_cmd, capture_output=True, text=True, timeout=300)
-        if os.path.exists(out_variant) and os.path.getsize(out_variant) > 100000:
+        res_ff = subprocess.run(ff_cmd, capture_output=True, text=True, timeout=600)
+        if res_ff.returncode != 0 and res_ff.stderr:
+            print(f'⚠️ FFmpeg {q_label} STDERR:', res_ff.stderr[-500:])
+        
+        if os.path.exists(out_variant) and os.path.getsize(out_variant) > 50000:
             var_fid, var_size, var_parts = upload_file_to_telegram(out_variant, q_label)
             if var_fid:
                 qualities[q_label] = {
@@ -334,9 +328,19 @@ for target in target_resolutions:
                 print(f'✅ {q_label} variant rendered & uploaded successfully! File Size: {(var_size/(1024*1024)):.2f} MB')
             if os.path.exists(out_variant): os.remove(out_variant)
         else:
-            print(f'⚠️ {q_label} transcoding failed or generated empty file.')
+            print(f'⚠️ {q_label} transcoding generated invalid/empty file.')
     except Exception as e_q:
         print(f'Transcode warning for {q_label}:', e_q)
+
+# Upload Master 1080p Video
+print('\n📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
+main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
+
+qualities['1080p'] = {
+    'fileId': main_file_id,
+    'fileSize': file_size,
+    'parts': parts
+}
 
 payload = {
     'status': 'success',
