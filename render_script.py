@@ -29,7 +29,11 @@ thumb_url = None
 if video_id:
     thumb_url = f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
     try:
-        oembed_resp = requests.get(f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json', timeout=10)
+        oembed_resp = requests.get(
+            f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json',
+            headers={'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8', 'User-Agent': 'Mozilla/5.0'},
+            timeout=10
+        )
         if oembed_resp.status_code == 200:
             o_data = oembed_resp.json()
             if o_data.get('title'):
@@ -97,18 +101,22 @@ def clean_tmp_videos():
             except: pass
 
 # =====================================================
-# STRATEGY 1: Direct yt-dlp + Fresh Cookies (1080p Full HD)
+# STRATEGY 1: Direct yt-dlp + Fresh Cookies + Indonesian Audio Dubbing Priority
 # =====================================================
-print('\n⚡ Strategy #1: Direct yt-dlp Engine with Cookies (Full HD 1080p Target)...')
+print('\n⚡ Strategy #1: Direct yt-dlp Engine with Cookies (Full HD 1080p Target & Indonesian Dubbed Audio)...')
+# Prioritize Indonesian Dubbing: ba[language=id]/ba[language^=id]/ba[language=ind]
+fmt_format = 'bv*[height<=1080]+ba[language=id]/ba[language^=id]/ba[language=ind]/ba/b[height<=1080]/best'
+lang_args = ['--extractor-args', 'youtube:lang=id', '--add-header', 'Accept-Language:id-ID,id;q=0.9,en;q=0.8']
+
 yt_strategies = [
     # 1a: tv_embedded,android_vr combo (working client for 2026)
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr;lang=id', '-f', fmt_format, '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
     # 1b: tv client
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv;lang=id', '-f', fmt_format, '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
     # 1c: ios + mweb combo
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb;lang=id', '-f', fmt_format, '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
     # 1d: Web client
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web;lang=id', '-f', fmt_format, '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
 for idx, cmd in enumerate(yt_strategies):
@@ -136,7 +144,7 @@ if not video_path:
     for p_idx, proxy in enumerate(proxies[:20]):
         print(f'--- 🔄 Trying Proxy #{p_idx+1}: {proxy} ---')
         clean_tmp_videos()
-        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=web,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
+        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=web,mweb;lang=id', '-f', fmt_format, '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=50)
         except subprocess.TimeoutExpired:
