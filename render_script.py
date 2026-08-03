@@ -246,40 +246,97 @@ if thumb_url:
     except Exception as e_th:
         print('Thumbnail upload warning:', e_th)
 
-# Video Upload
-CHUNK_SIZE = 15 * 1024 * 1024
-parts = []
-main_file_id = None
-clean_title = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
+# Helper function to upload any video file to Telegram Cloud in 15MB chunks
+def upload_file_to_telegram(fpath, caption_label):
+    fsize = os.path.getsize(fpath)
+    part_list = []
+    first_fid = None
+    clean_t = re.sub(r'[^\w\s-]', '', title).strip() or 'Video'
+    CHUNK_SZ = 15 * 1024 * 1024
+    
+    with open(fpath, 'rb') as vf:
+        p_idx = 0
+        off = 0
+        n_parts = (fsize + CHUNK_SZ - 1) // CHUNK_SZ
+        while off < fsize:
+            chunk = vf.read(CHUNK_SZ)
+            c_len = len(chunk)
+            c_path = f'/tmp/tmp_upload_chunk_{p_idx}.mp4'
+            with open(c_path, 'wb') as cf:
+                cf.write(chunk)
+            
+            up_name = f"{clean_t[:25]}_{caption_label}.mp4" if n_parts == 1 else f"{clean_t[:25]}_{caption_label}_part{p_idx+1}.mp4"
+            
+            with open(c_path, 'rb') as cf:
+                files = {'document': (up_name, cf, 'video/mp4')}
+                resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:35]} [{caption_label}] (Part {p_idx+1}/{n_parts})'}, files=files)
+                if resp.status_code == 200 and resp.json().get('ok'):
+                    res_obj = resp.json().get('result', {})
+                    doc = res_obj.get('document') or res_obj.get('video')
+                    if doc:
+                        fid = doc.get('file_id')
+                        msg_id = res_obj.get('message_id')
+                        if p_idx == 0: first_fid = fid
+                        part_list.append({'partIndex': p_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': off, 'endByte': off + c_len - 1, 'chunkSize': c_len})
+            
+            if os.path.exists(c_path): os.remove(c_path)
+            off += c_len
+            p_idx += 1
+            
+    return first_fid, fsize, part_list
 
-with open(video_path, 'rb') as vf:
-    part_idx = 0
-    offset = 0
-    num_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
-    while offset < file_size:
-        chunk = vf.read(CHUNK_SIZE)
-        chunk_len = len(chunk)
-        chunk_path = f'/tmp/chunk_{part_idx}.mp4'
-        with open(chunk_path, 'wb') as cf:
-            cf.write(chunk)
-        
-        upload_filename = f"{clean_title[:30]}.mp4" if num_parts == 1 else f"{clean_title[:30]}_part{part_idx+1}.mp4"
-        
-        with open(chunk_path, 'rb') as cf:
-            files = {'document': (upload_filename, cf, 'video/mp4')}
-            resp = requests.post(f'https://api.telegram.org/bot{bot_token}/sendDocument', data={'chat_id': chat_id, 'caption': f'🎬 {title[:40]} (Part {part_idx+1}/{num_parts})'}, files=files)
-            if resp.status_code == 200 and resp.json().get('ok'):
-                res_obj = resp.json().get('result', {})
-                doc = res_obj.get('document') or res_obj.get('video')
-                if doc:
-                    fid = doc.get('file_id')
-                    msg_id = res_obj.get('message_id')
-                    if part_idx == 0: main_file_id = fid
-                    parts.append({'partIndex': part_idx, 'fileId': fid, 'messageId': msg_id, 'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len})
-        
-        if os.path.exists(chunk_path): os.remove(chunk_path)
-        offset += chunk_len
-        part_idx += 1
+# Upload Master 1080p Video
+print('📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
+main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
+
+# Multi-Quality Transcoding Dictionary
+qualities = {
+    '1080p': {
+        'fileId': main_file_id,
+        'fileSize': file_size,
+        'parts': parts
+    }
+}
+
+# Transcode & Upload lower resolutions (720p, 360p, 144p)
+target_resolutions = [
+    {'label': '720p', 'height': 720, 'bitrate': '1200k'},
+    {'label': '360p', 'height': 360, 'bitrate': '400k'},
+    {'label': '144p', 'height': 144, 'bitrate': '120k'}
+]
+
+for target in target_resolutions:
+    q_label = target['label']
+    q_height = target['height']
+    q_bitrate = target['bitrate']
+    out_variant = f'/tmp/video_{q_label}.mp4'
+    
+    print(f'\n⚡ [FFmpeg Cloud Transcoder] Rendering {q_label} variant (height={q_height}, bitrate={q_bitrate})...')
+    ff_cmd = [
+        'ffmpeg', '-y', '-i', video_path,
+        '-vf', f'scale=-2:{q_height}',
+        '-c:v', 'libx264', '-preset', 'superfast',
+        '-b:v', q_bitrate,
+        '-c:a', 'aac', '-b:a', '96k',
+        '-movflags', '+faststart',
+        out_variant
+    ]
+    try:
+        res_ff = subprocess.run(ff_cmd, capture_output=True, text=True, timeout=300)
+        if os.path.exists(out_variant) and os.path.getsize(out_variant) > 100000:
+            var_fid, var_size, var_parts = upload_file_to_telegram(out_variant, q_label)
+            if var_fid:
+                qualities[q_label] = {
+                    'fileId': var_fid,
+                    'fileSize': var_size,
+                    'parts': var_parts
+                }
+                print(f'✅ {q_label} variant rendered & uploaded successfully! File Size: {(var_size/(1024*1024)):.2f} MB')
+            if os.path.exists(out_variant): os.remove(out_variant)
+        else:
+            print(f'⚠️ {q_label} transcoding failed or generated empty file.')
+    except Exception as e_q:
+        print(f'Transcode warning for {q_label}:', e_q)
 
 payload = {
     'status': 'success',
@@ -294,6 +351,7 @@ payload = {
         'fileId': main_file_id,
         'thumbnailFileId': thumb_file_id or main_file_id,
         'parts': parts,
+        'qualities': qualities,
         'subtitles': subtitles
     }
 }
@@ -304,3 +362,4 @@ try:
     print('✅ Process Completed Successfully! Callback status:', cb_res.status_code)
 except Exception as e_cb:
     print('Callback warning:', e_cb)
+
