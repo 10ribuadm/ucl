@@ -288,9 +288,10 @@ def upload_file_to_telegram(fpath, caption_label):
 # Multi-Quality Transcoding Dictionary
 qualities = {}
 
-# Transcode & Upload lower resolutions FIRST (144p, 360p, 720p) so lightweight versions are available immediately!
+# Transcode & Upload lower resolutions FIRST (144p, 240p, 360p, 720p) so lightweight versions are available immediately!
 target_resolutions = [
     {'label': '144p', 'height': 144, 'bitrate': '120k'},
+    {'label': '240p', 'height': 240, 'bitrate': '250k'},
     {'label': '360p', 'height': 360, 'bitrate': '400k'},
     {'label': '720p', 'height': 720, 'bitrate': '1200k'}
 ]
