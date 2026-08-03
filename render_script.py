@@ -293,10 +293,28 @@ def upload_file_to_telegram(fpath, caption_label):
             
     return first_fid, fsize, part_list
 
+# Check existing media items in Cloud Vault to skip already rendered resolutions!
+existing_qualities = {}
+if callback_url:
+    try:
+        base_api_url = callback_url.split('/api/')[0]
+        check_res = requests.get(f'{base_api_url}/api/media', timeout=10)
+        if check_res.status_code == 200:
+            all_media = check_res.json().get('media', [])
+            for m in all_media:
+                m_title = (m.get('title') or '').strip().lower()
+                m_desc = (m.get('description') or '').strip().lower()
+                if (title and title.strip().lower() in m_title) or (video_id and video_id.lower() in m_desc):
+                    existing_qualities = m.get('qualities', {})
+                    print(f'🔍 [Deduplication] Found existing media in Cloud Vault with qualities: {list(existing_qualities.keys())}')
+                    break
+    except Exception as e_chk:
+        print('Check existing media warning:', e_chk)
+
 # Multi-Quality Transcoding Dictionary
 qualities = {}
 
-# Transcode & Upload lower resolutions (240p, 360p, 720p) so lightweight versions are available immediately!
+# Transcode & Upload lower resolutions (240p, 360p, 720p) ONLY IF NOT ALREADY IN VAULT!
 target_resolutions = [
     {'label': '240p', 'height': 240, 'bitrate': '250k'},
     {'label': '360p', 'height': 360, 'bitrate': '450k'},
@@ -305,6 +323,11 @@ target_resolutions = [
 
 for target in target_resolutions:
     q_label = target['label']
+    if q_label in existing_qualities and existing_qualities[q_label].get('fileId'):
+        print(f'⏩ [Skip Render] Quality {q_label} ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
+        qualities[q_label] = existing_qualities[q_label]
+        continue
+
     q_height = target['height']
     q_bitrate = target['bitrate']
     out_variant = f'/tmp/video_{q_label}.mp4'
@@ -340,15 +363,20 @@ for target in target_resolutions:
     except Exception as e_q:
         print(f'Transcode warning for {q_label}:', e_q)
 
-# Upload Master 1080p Video
-print('\n📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
-main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
-
-qualities['1080p'] = {
-    'fileId': main_file_id,
-    'fileSize': file_size,
-    'parts': parts
-}
+# Upload Master 1080p Video (skip if already exists)
+if '1080p' in existing_qualities and existing_qualities['1080p'].get('fileId'):
+    print('⏩ [Skip Upload] Master 1080p Video ALREADY EXISTS in Cloud Vault! Preserving existing file ID...')
+    qualities['1080p'] = existing_qualities['1080p']
+    main_file_id = existing_qualities['1080p']['fileId']
+    parts = existing_qualities['1080p'].get('parts', [])
+else:
+    print('\n📦 Uploading 1080p Master Video to Telegram Cloud Vault...')
+    main_file_id, file_size, parts = upload_file_to_telegram(video_path, '1080p')
+    qualities['1080p'] = {
+        'fileId': main_file_id,
+        'fileSize': file_size,
+        'parts': parts
+    }
 
 payload = {
     'status': 'success',
