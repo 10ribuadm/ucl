@@ -101,22 +101,26 @@ def clean_tmp_videos():
 # =====================================================
 print('\n⚡ Strategy #1: Direct yt-dlp Engine with Cookies (Full HD 1080p Target)...')
 yt_strategies = [
-    # 1a: Web client + cookies (Full HD 1080p)
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-    # 1b: mweb + web client combo
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mweb,web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1a: tv_embedded,android_vr combo (working client for 2026)
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1b: tv client
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
     # 1c: ios + mweb combo
     ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-    # 1d: tv_embedded
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1d: Web client
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
 for idx, cmd in enumerate(yt_strategies):
     print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[3:8])}... ---')
     clean_tmp_videos()
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-    if result.stdout: print(result.stdout[-600:])
-    if result.returncode != 0 and result.stderr: print('STDERR:', result.stderr[-400:])
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        if result.stdout: print(result.stdout[-600:])
+        if result.returncode != 0 and result.stderr: print('STDERR:', result.stderr[-400:])
+    except subprocess.TimeoutExpired:
+        print(f'Strategy #{idx+1} timed out after 30 mins')
+        continue
     candidate = check_valid_video()
     if candidate:
         video_path = candidate
