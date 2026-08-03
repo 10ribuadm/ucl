@@ -77,7 +77,7 @@ def fetch_free_proxies():
     print(f'🌐 Fetched {len(proxy_list)} candidate proxies.')
     return proxy_list[:25]
 
-# Load cookies if available (used as fallback for yt-dlp only)
+# Load cookies if available
 cookies_path = None
 yt_cookies = os.environ.get('YOUTUBE_COOKIES', '')
 if yt_cookies and len(yt_cookies) > 50:
@@ -85,6 +85,9 @@ if yt_cookies and len(yt_cookies) > 50:
     with open(cookies_path, 'w') as cf:
         cf.write(yt_cookies)
     print(f'🍪 Loaded YouTube Cookies from Secrets (Length: {len(yt_cookies)} bytes)')
+else:
+    print('⚠️ WARNING: No YOUTUBE_COOKIES found in environment!')
+
 cookie_args = ['--cookies', cookies_path] if cookies_path else []
 
 def clean_tmp_videos():
@@ -94,117 +97,85 @@ def clean_tmp_videos():
             except: pass
 
 # =====================================================
-# STRATEGY 1: COBALT API (No Cookies, No IP Block)
-# Best: Uses their own servers to download from YouTube
+# STRATEGY 1: Direct yt-dlp + Fresh Cookies (1080p Full HD)
 # =====================================================
-print('\n⚡ Strategy #1: Cobalt API Engine (No Cookies Needed)...')
-cobalt_instances = [
-    'https://api.cobalt.tools',
-    'https://cobalt-api.hyper.lol',
-    'https://cobalt.api.timelessnesses.me',
-    'https://cobalt-api.kwiatekmiki.com',
-    'https://api.cobalt.best',
+print('\n⚡ Strategy #1: Direct yt-dlp Engine with Cookies (Full HD 1080p Target)...')
+yt_strategies = [
+    # 1a: Web client + cookies (Full HD 1080p)
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1b: mweb + web client combo
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mweb,web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1c: ios + mweb combo
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    # 1d: tv_embedded
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
-for c_idx, cobalt_url in enumerate(cobalt_instances):
-    try:
-        print(f'--- 🔄 Trying Cobalt #{c_idx+1}: {cobalt_url} ---')
-        headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-        }
-        # Try Cobalt v10 API format
-        payload = {
-            'url': url,
-            'videoQuality': '1080',
-            'filenameStyle': 'basic',
-        }
-        resp = requests.post(f'{cobalt_url}/', json=payload, headers=headers, timeout=30)
-        if resp.status_code == 200:
-            data = resp.json()
-            dl_url = data.get('url') or data.get('stream', {}).get('url')
-            if not dl_url and data.get('picker'):
-                # Some cobalt versions return picker with multiple streams
-                for pick in data['picker']:
-                    if pick.get('url'):
-                        dl_url = pick['url']
-                        break
-            if dl_url:
-                print(f'✅ Cobalt returned download URL, downloading...')
-                dl_resp = requests.get(dl_url, stream=True, timeout=120)
-                if dl_resp.status_code == 200:
-                    out_path = '/tmp/video.mp4'
-                    with open(out_path, 'wb') as vf:
-                        for chunk in dl_resp.iter_content(chunk_size=1024*1024):
-                            vf.write(chunk)
-                    if os.path.exists(out_path) and os.path.getsize(out_path) >= 500000:
-                        video_path = out_path
-                        print(f'✅ Cobalt #{c_idx+1} Download Succeeded! ({os.path.getsize(out_path)/(1024*1024):.1f} MB)')
-                        break
-                    else:
-                        print(f'Cobalt #{c_idx+1}: Downloaded file too small, trying next...')
-                else:
-                    print(f'Cobalt #{c_idx+1}: Download HTTP {dl_resp.status_code}')
-            else:
-                status = data.get('status', 'unknown')
-                error_text = data.get('error', {}).get('code', '') if isinstance(data.get('error'), dict) else str(data.get('error', ''))
-                print(f'Cobalt #{c_idx+1}: No URL returned (status={status}, error={error_text})')
-        else:
-            print(f'Cobalt #{c_idx+1}: HTTP {resp.status_code} - {resp.text[:200]}')
-    except Exception as e_co:
-        print(f'Cobalt #{c_idx+1} error: {e_co}')
+for idx, cmd in enumerate(yt_strategies):
+    print(f'--- 🔄 Trying yt-dlp Strategy #{idx+1}: {" ".join(cmd[3:8])}... ---')
+    clean_tmp_videos()
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    if result.stdout: print(result.stdout[-600:])
+    if result.returncode != 0 and result.stderr: print('STDERR:', result.stderr[-400:])
+    candidate = check_valid_video()
+    if candidate:
+        video_path = candidate
+        print(f'✅ Direct yt-dlp Strategy #{idx+1} Succeeded! File size: {os.path.getsize(candidate)/(1024*1024):.1f} MB')
+        break
 
 # =====================================================
-# STRATEGY 2: INVIDIOUS API (No Cookies, Alternative Frontend)
+# STRATEGY 2: Proxy-Rotated yt-dlp + Cookies
+# =====================================================
+if not video_path:
+    print('\n⚡ Strategy #2: Proxy-Rotated yt-dlp Engine...')
+    proxies = fetch_free_proxies()
+    for p_idx, proxy in enumerate(proxies[:20]):
+        print(f'--- 🔄 Trying Proxy #{p_idx+1}: {proxy} ---')
+        clean_tmp_videos()
+        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=web,mweb', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=50)
+        except subprocess.TimeoutExpired:
+            print(f'Proxy #{p_idx+1} timed out, skipping...')
+            continue
+        candidate = check_valid_video()
+        if candidate:
+            video_path = candidate
+            print(f'✅ Proxy-Rotated yt-dlp Strategy (Proxy #{p_idx+1}) Succeeded!')
+            break
+
+# =====================================================
+# STRATEGY 3: Invidious / Piped Stream (Fallback)
 # =====================================================
 if not video_path and video_id:
-    print('\n⚡ Strategy #2: Invidious / Piped API Engine...')
+    print('\n⚡ Strategy #3: Invidious / Piped API Engine (Fallback)...')
     invidious_instances = [
         'https://inv.nadeko.net',
         'https://invidious.nerdvpn.de',
-        'https://invidious.jing.rocks',
-        'https://iv.datura.network',
         'https://invidious.privacyredirect.com',
         'https://pipedapi.kavin.rocks',
-        'https://pipedapi.adminforge.de',
     ]
     for inv_idx, inv_url in enumerate(invidious_instances):
         try:
             is_piped = 'piped' in inv_url
-            if is_piped:
-                api_endpoint = f'{inv_url}/streams/{video_id}'
-            else:
-                api_endpoint = f'{inv_url}/api/v1/videos/{video_id}'
+            api_endpoint = f'{inv_url}/streams/{video_id}' if is_piped else f'{inv_url}/api/v1/videos/{video_id}'
             print(f'--- 🔄 Trying {"Piped" if is_piped else "Invidious"} #{inv_idx+1}: {inv_url} ---')
             resp = requests.get(api_endpoint, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
             if resp.status_code == 200:
                 data = resp.json()
                 dl_url = None
                 if is_piped:
-                    # Piped: videoStreams array
-                    streams = data.get('videoStreams', []) + data.get('audioStreams', [])
-                    # Find best mp4 video+audio
+                    streams = data.get('videoStreams', [])
                     for s in sorted(streams, key=lambda x: int(x.get('quality', '0p').replace('p','') or 0), reverse=True):
                         if s.get('url') and s.get('videoOnly') == False:
                             dl_url = s['url']
-                            print(f'  Found Piped stream: {s.get("quality")} ({s.get("mimeType", "?")})')
                             break
                 else:
-                    # Invidious: formatStreams array
                     for fmt in data.get('formatStreams', []):
                         if fmt.get('url') and fmt.get('container') == 'mp4':
                             dl_url = fmt['url']
-                            print(f'  Found Invidious stream: {fmt.get("qualityLabel")} ({fmt.get("type", "?")})')
                             break
-                    if not dl_url:
-                        for fmt in data.get('adaptiveFormats', []):
-                            if fmt.get('url') and 'video' in fmt.get('type', '') and 'mp4' in fmt.get('type', ''):
-                                dl_url = fmt['url']
-                                print(f'  Found Invidious adaptive: {fmt.get("qualityLabel")}')
-                                break
-                
                 if dl_url:
-                    print(f'✅ Got stream URL, downloading...')
                     clean_tmp_videos()
                     dl_resp = requests.get(dl_url, stream=True, timeout=120, headers={'User-Agent': 'Mozilla/5.0'})
                     if dl_resp.status_code == 200:
@@ -212,62 +183,12 @@ if not video_path and video_id:
                         with open(out_path, 'wb') as vf:
                             for chunk in dl_resp.iter_content(chunk_size=1024*1024):
                                 vf.write(chunk)
-                        if os.path.exists(out_path) and os.path.getsize(out_path) >= 500000:
+                        if os.path.exists(out_path) and os.path.getsize(out_path) >= 1000000:
                             video_path = out_path
-                            print(f'✅ Invidious/Piped #{inv_idx+1} Succeeded! ({os.path.getsize(out_path)/(1024*1024):.1f} MB)')
+                            print(f'✅ Invidious/Piped #{inv_idx+1} Succeeded!')
                             break
-                else:
-                    print(f'  No suitable stream found')
-            else:
-                print(f'  HTTP {resp.status_code}')
         except Exception as e_inv:
-            print(f'  Error: {e_inv}')
-
-# =====================================================
-# STRATEGY 3: yt-dlp with web client + cookies (fallback)
-# =====================================================
-if not video_path:
-    print('\n⚡ Strategy #3: yt-dlp (web client + cookies fallback)...')
-    yt_strategies = [
-        ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--format-sort', 'res:1080,fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-        ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=mediaconnect,tv', '-f', 'bv*[height<=1080]+ba/b[height<=1080]/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-        ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=android,ios', '-f', 'b[height<=1080]/best', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-    ]
-    for idx, cmd in enumerate(yt_strategies):
-        print(f'--- 🔄 yt-dlp Strategy #{idx+1}: {" ".join(cmd[3:7])} ---')
-        clean_tmp_videos()
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-            if result.stdout: print(result.stdout[-400:])
-            if result.returncode != 0 and result.stderr: print('STDERR:', result.stderr[-200:])
-        except subprocess.TimeoutExpired:
-            print(f'yt-dlp Strategy #{idx+1} timed out')
-            continue
-        candidate = check_valid_video()
-        if candidate:
-            video_path = candidate
-            print(f'✅ yt-dlp Strategy #{idx+1} Succeeded!')
-            break
-
-# =====================================================
-# STRATEGY 4: Proxy-Rotated yt-dlp (last resort)
-# =====================================================
-if not video_path:
-    print('\n⚡ Strategy #4: Proxy-Rotated yt-dlp (Last Resort)...')
-    proxies = fetch_free_proxies()
-    for p_idx, proxy in enumerate(proxies[:15]):
-        print(f'--- 🔄 Proxy #{p_idx+1}: {proxy} ---')
-        clean_tmp_videos()
-        cmd = ['yt-dlp', '--proxy', proxy, '--extractor-args', 'youtube:player_client=web,mediaconnect', '-f', 'bv*[height<=1080]+ba/b/best', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=50)
-        except subprocess.TimeoutExpired:
-            continue
-        candidate = check_valid_video()
-        if candidate:
-            video_path = candidate
-            print(f'✅ Proxy #{p_idx+1} Succeeded!')
-            break
+            pass
 
 if not video_path or not os.path.exists(video_path) or os.path.getsize(video_path) < 500000:
     print('\n❌ All download strategies failed.')
