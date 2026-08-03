@@ -255,10 +255,33 @@ if duration == 0:
 
 subtitles = []
 
-# Thumbnail Upload
-thumb_file_id = None
-if thumb_url:
+# Check existing media items in Cloud Vault to skip already rendered resolutions & thumbnails!
+existing_qualities = {}
+existing_thumb_id = None
+if callback_url:
     try:
+        base_api_url = callback_url.split('/api/')[0]
+        check_res = requests.get(f'{base_api_url}/api/media', timeout=10)
+        if check_res.status_code == 200:
+            all_media = check_res.json().get('media', [])
+            for m in all_media:
+                m_title = (m.get('title') or '').strip().lower()
+                m_desc = (m.get('description') or '').strip().lower()
+                if (title and title.strip().lower() in m_title) or (video_id and video_id.lower() in m_desc):
+                    existing_qualities = m.get('qualities', {})
+                    existing_thumb_id = m.get('thumbnailFileId')
+                    print(f'🔍 [Deduplication] Found existing media in Cloud Vault with qualities: {list(existing_qualities.keys())}, thumbId: {existing_thumb_id}')
+                    break
+    except Exception as e_chk:
+        print('Check existing media warning:', e_chk)
+
+# Thumbnail Upload (Deduplicated)
+thumb_file_id = existing_thumb_id
+if existing_thumb_id:
+    log_progress('thumbnail_skip', 25, f'⏩ Cover Thumbnail already exists in Cloud Vault ({existing_thumb_id[:15]}...). Skipping duplicate upload!')
+elif thumb_url:
+    try:
+        log_progress('thumbnail_uploading', 22, f'🖼️ Downloading & Uploading Cover Thumbnail to Telegram Cloud Vault...')
         t_res = requests.get(thumb_url, timeout=15)
         if t_res.status_code == 200:
             thumb_path = '/tmp/thumb.jpg'
@@ -271,7 +294,7 @@ if thumb_url:
                 if resp.status_code == 200 and resp.json().get('ok'):
                     photos = resp.json()['result']['photo']
                     thumb_file_id = photos[-1]['file_id']
-                    print('🖼️ HD Cover Thumbnail uploaded successfully! File ID:', thumb_file_id)
+                    log_progress('thumbnail_uploaded', 25, f'🖼️ Cover Thumbnail uploaded to Telegram Cloud Vault! (ID: {thumb_file_id[:15]}...)')
             if os.path.exists(thumb_path): os.remove(thumb_path)
     except Exception as e_th:
         print('Thumbnail upload warning:', e_th)
@@ -314,24 +337,6 @@ def upload_file_to_telegram(fpath, caption_label):
             p_idx += 1
             
     return first_fid, fsize, part_list
-
-# Check existing media items in Cloud Vault to skip already rendered resolutions!
-existing_qualities = {}
-if callback_url:
-    try:
-        base_api_url = callback_url.split('/api/')[0]
-        check_res = requests.get(f'{base_api_url}/api/media', timeout=10)
-        if check_res.status_code == 200:
-            all_media = check_res.json().get('media', [])
-            for m in all_media:
-                m_title = (m.get('title') or '').strip().lower()
-                m_desc = (m.get('description') or '').strip().lower()
-                if (title and title.strip().lower() in m_title) or (video_id and video_id.lower() in m_desc):
-                    existing_qualities = m.get('qualities', {})
-                    print(f'🔍 [Deduplication] Found existing media in Cloud Vault with qualities: {list(existing_qualities.keys())}')
-                    break
-    except Exception as e_chk:
-        print('Check existing media warning:', e_chk)
 
 # Multi-Quality Transcoding Dictionary
 qualities = {}
