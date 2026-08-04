@@ -157,11 +157,12 @@ if not video_path:
 # ─── TRANSCODE to exact quality ───────────────────────────────────────────────
 out_path = f'/tmp/video_{quality}.mp4'
 print(f'\n🔧 Transcoding to [{quality}] — height={height} vbr={vbr} abr={abr}...')
+preset = 'ultrafast' if height <= 480 else 'superfast'
 ff_cmd = [
     'ffmpeg', '-y', '-i', video_path,
     '-vf', f'scale=-2:{height}',
     '-c:v', 'libx264', '-b:v', vbr, '-maxrate', vbr, '-bufsize', str(int(vbr[:-1])*2)+'k',
-    '-preset', 'fast', '-tune', 'fastdecode',
+    '-preset', preset, '-tune', 'fastdecode',
     '-c:a', 'aac', '-b:a', abr, '-ac', '2',
     '-movflags', '+faststart',
     '-threads', '0',
