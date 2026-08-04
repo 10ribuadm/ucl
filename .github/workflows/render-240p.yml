@@ -1,0 +1,59 @@
+name: "🎬 HayukTube Render v2 — 240p Hemat Data"
+
+on:
+  repository_dispatch:
+    types: [render_240p]
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'YouTube URL to Download & Render (240p)'
+        required: true
+      category:
+        description: 'Category (MUSIC, VIRAL, GENERAL, GAMING, HIBURAN)'
+        required: false
+        default: 'General'
+
+jobs:
+  render_240p:
+    name: "⚡ 240p Hemat Data Worker"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: "📥 Checkout Repository"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: "🛡️ Setup Cloudflare WARP (Bypass Datacenter IP Block)"
+        uses: fscarmen/warp-on-actions@main
+
+      - name: "🦕 Install Deno Runtime (yt-dlp JS Solver)"
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.deno/bin:$PATH"
+          deno --version
+
+      - name: "📦 Install Dependencies"
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg libcurl4-openssl-dev
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir yt-dlp pytubefix cloudscraper requests curl_cffi
+
+      - name: "🚀 Render 240p & Upload to Telegram Cloud Vault"
+        env:
+          TARGET_URL:    ${{ github.event.client_payload.url || github.event.inputs.video_url }}
+          CATEGORY:      ${{ github.event.client_payload.category || github.event.inputs.category }}
+          CALLBACK_URL:  ${{ github.event.client_payload.callback_url || 'https://tube.hayuk.web.id/api/webhook/download-complete' }}
+          BOT_TOKEN:     ${{ github.event.client_payload.bot_token || secrets.TELEGRAM_BOT_TOKEN || '8899812523:AAHBTqKxaSiTWq8bRLs0tvuoktZyyc8W7ps' }}
+          CHAT_ID:       ${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID || '-1003811040179' }}
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+          QUALITY:       "240p"
+        run: |
+          export PATH="$HOME/.deno/bin:$PATH"
+          echo "🎯 Quality: 240p | URL: $TARGET_URL"
+          python3 render_script_v2.py
