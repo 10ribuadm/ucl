@@ -132,26 +132,26 @@ def check_valid_video():
                 return p
     return None
 
-# yt-dlp format selector for this quality tier
-# bv*[height<=TARGET]+ba / best[height<=TARGET]
-fmt = f'bv*[height<={height}]+ba/b[height<={height}]/best'
+# yt-dlp format selector: Try target height first, then fallback to best available stream
+fmt = f'bv*[height<={height}]+ba/bv*[height<={height}]+ba[language=id]/bv*+ba/b[height<={height}]/bestvideo+bestaudio/best'
+lang_args = ['--extractor-args', 'youtube:lang=id', '--add-header', 'Accept-Language:id-ID,id;q=0.9,en;q=0.8']
 
 STRATEGIES = [
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr',
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr;lang=id',
      '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv',
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv;lang=id',
      '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb',
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb;lang=id',
      '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web',
-     '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
+    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web;lang=id',
+     '-f', 'bv*+ba/best', '--merge-output-format', 'mp4',
+     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
 video_path = None
