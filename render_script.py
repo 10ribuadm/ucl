@@ -49,21 +49,33 @@ def log_progress(stage, percent, message):
 log_progress('initializing', 5, f'🚀 Cloud Worker Initialized for {url}')
 
 if video_id:
-    thumb_url = f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
+    # Always try maxresdefault.jpg (1280x720 HD) first, then fallback to sddefault/hqdefault
+    hd_candidates = [
+        f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
+        f'https://img.youtube.com/vi/{video_id}/sddefault.jpg',
+        f'https://img.youtube.com/vi/{video_id}/hqdefault.jpg'
+    ]
+    for cand in hd_candidates:
+        try:
+            chk = requests.head(cand, timeout=5)
+            if chk.status_code == 200:
+                thumb_url = cand
+                print(f'🖼️ Found HD Cover Thumbnail URL: {thumb_url}')
+                break
+        except Exception:
+            pass
+
+    if not thumb_url:
+        thumb_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
+
     try:
-        oembed_resp = requests.get(
-            f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json',
-            headers={'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8', 'User-Agent': 'Mozilla/5.0'},
-            timeout=10
-        )
+        oembed_resp = requests.get(f'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json', timeout=10)
         if oembed_resp.status_code == 200:
             o_data = oembed_resp.json()
             if o_data.get('title'):
                 title = o_data['title']
             if o_data.get('author_name'):
                 description = f"Channel: {o_data['author_name']}\nSource: {url}"
-            if o_data.get('thumbnail_url'):
-                thumb_url = o_data['thumbnail_url']
             print('✅ Extracted Video Title via oEmbed API:', title)
     except Exception as e_oe:
         print('oEmbed API error:', e_oe)
