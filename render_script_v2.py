@@ -23,6 +23,7 @@ if not url:
 
 # ─── QUALITY → FFmpeg HEIGHT MAP ─────────────────────────────────────────────
 QUALITY_MAP = {
+    '144p':  {'height': 144,  'vbr': '150k',  'abr': '48k',  'label': '144p Ultra Low'},
     '240p':  {'height': 240,  'vbr': '300k',  'abr': '64k',  'label': '240p Hemat Data'},
     '360p':  {'height': 360,  'vbr': '600k',  'abr': '96k',  'label': '360p Standard'},
     '480p':  {'height': 480,  'vbr': '1000k', 'abr': '128k', 'label': '480p SD'},
@@ -222,9 +223,9 @@ try:
         duration = int(float(dr.stdout.strip()))
 except Exception: pass
 
-# ─── Upload Thumbnail (ONLY 1 Thumbnail per Video, handled by 240p worker) ───
+# ─── Upload Thumbnail (ONLY 1 Thumbnail per Video, handled by 144p/240p worker) ───
 thumb_file_id = None
-if thumb_url and (quality == '240p' or os.environ.get('FORCE_THUMBNAIL', 'false').lower() == 'true'):
+if thumb_url and (quality in ['144p', '240p'] or os.environ.get('FORCE_THUMBNAIL', 'false').lower() == 'true'):
     try:
         t_res = requests.get(thumb_url, timeout=15)
         if t_res.status_code == 200:
