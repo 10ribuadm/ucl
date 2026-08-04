@@ -53,6 +53,25 @@ description = f'Source: {url}'
 duration    = 0
 thumb_url   = None
 
+# ─── LOG PROGRESS HELPER (Socket.IO Stream Receiver) ───────────────────────
+def log_progress(stage, percent, message):
+    if not callback_url: return
+    try:
+        base_api = re.sub(r'/api/.*$', '', callback_url)
+        log_url  = f'{base_api}/api/render-log'
+        requests.post(log_url, json={
+            'url': url,
+            'title': f'[{quality}] {title}',
+            'stage': stage,
+            'percent': percent,
+            'message': f'⚡ [{quality}] {message}',
+            'timestamp': int(time.time() * 1000)
+        }, timeout=5)
+    except Exception as e:
+        print(f'Log notice: {e}')
+
+log_progress('initializing', 10, f'Runner v2 [{quality}] diinisialisasi untuk {url}')
+
 # HD thumbnail (maxresdefault → sddefault → hqdefault)
 if video_id:
     for cand in [
@@ -83,6 +102,8 @@ if video_id:
             print(f'✅ Video Title   : {title}')
     except Exception as e:
         print(f'oEmbed warning: {e}')
+
+log_progress('downloading', 25, f'Mengunduh stream video [{quality}] ({title[:40]})...')
 
 # ─── COOKIES ─────────────────────────────────────────────────────────────────
 cookies_path = None
@@ -157,6 +178,7 @@ if not video_path:
 # ─── TRANSCODE to exact quality ───────────────────────────────────────────────
 out_path = f'/tmp/video_{quality}.mp4'
 print(f'\n🔧 Transcoding to [{quality}] — height={height} vbr={vbr} abr={abr}...')
+log_progress('transcoding', 50, f'Mengoversi video ke [{quality}] dengan FFmpeg...')
 preset = 'ultrafast' if height <= 480 else 'superfast'
 ff_cmd = [
     'ffmpeg', '-y', '-i', video_path,
@@ -233,6 +255,7 @@ clean_title = re.sub(r'[^\w\s-]', '', title).strip()[:30] or 'Video'
 num_parts = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
 
 print(f'\n📤 Uploading [{quality}] to Telegram ({num_parts} part(s))...')
+log_progress('uploading', 80, f'Mengunggah berkas [{quality}] ({num_parts} part) ke Telegram Cloud Vault...')
 
 with open(out_path, 'rb') as vf:
     part_idx = 0
@@ -263,12 +286,15 @@ with open(out_path, 'rb') as vf:
                         'startByte': offset, 'endByte': offset + chunk_len - 1, 'chunkSize': chunk_len
                     })
                     print(f'✅ Part {part_idx+1}/{num_parts} uploaded — file_id: {fid}')
+                    log_progress('uploading', int(80 + (part_idx+1)/num_parts * 15), f'Part {part_idx+1}/{num_parts} [{quality}] terunggah')
             else:
                 print(f'⚠️  Upload part {part_idx+1} failed: {r.text[:200]}')
 
         if os.path.exists(chunk_path): os.remove(chunk_path)
         offset   += chunk_len
         part_idx += 1
+
+log_progress('completed', 100, f'✅ Process Selesai! Video [{quality}] berhasil diimpor ke Cloud Storage!')
 
 # ─── Callback to VPS ─────────────────────────────────────────────────────────
 payload = {
