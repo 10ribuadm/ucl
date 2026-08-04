@@ -199,9 +199,9 @@ try:
         duration = int(float(dr.stdout.strip()))
 except Exception: pass
 
-# ─── Upload Thumbnail ─────────────────────────────────────────────────────────
+# ─── Upload Thumbnail (ONLY 1 Thumbnail per Video, handled by 240p worker) ───
 thumb_file_id = None
-if thumb_url:
+if thumb_url and (quality == '240p' or os.environ.get('FORCE_THUMBNAIL', 'false').lower() == 'true'):
     try:
         t_res = requests.get(thumb_url, timeout=15)
         if t_res.status_code == 200:
@@ -211,16 +211,18 @@ if thumb_url:
             with open(thumb_path, 'rb') as tf:
                 r = requests.post(
                     f'https://api.telegram.org/bot{bot_token}/sendPhoto',
-                    data={'chat_id': chat_id, 'caption': f'🖼️ [{quality}] {title[:40]}'},
+                    data={'chat_id': chat_id, 'caption': f'🖼️ Cover Thumbnail for {title[:40]}'},
                     files={'photo': (f'thumb_{clean_t}.jpg', tf, 'image/jpeg')}
                 )
                 if r.status_code == 200 and r.json().get('ok'):
                     photos = r.json()['result']['photo']
                     thumb_file_id = photos[-1]['file_id']
-                    print(f'🖼️ Thumbnail uploaded — file_id: {thumb_file_id}')
+                    print(f'🖼️ Cover Thumbnail uploaded — file_id: {thumb_file_id}')
             if os.path.exists(thumb_path): os.remove(thumb_path)
     except Exception as e:
         print(f'Thumbnail warning: {e}')
+else:
+    print(f'ℹ️ [{quality}] Skipping duplicate thumbnail upload (thumbnail is uploaded once by 240p worker)')
 
 # ─── Upload Video (chunked) ───────────────────────────────────────────────────
 CHUNK_SIZE = 15 * 1024 * 1024
@@ -281,8 +283,16 @@ payload = {
         'mimeType':         'video/mp4',
         'quality':          quality,
         'fileId':           main_file_id,
-        'thumbnailFileId':  thumb_file_id or main_file_id,
+        'thumbnailFileId':  thumb_file_id,
         'parts':            parts,
+        'qualities':        {
+            quality: {
+                'quality':  quality,
+                'fileId':   main_file_id,
+                'parts':    parts,
+                'fileSize': file_size
+            }
+        },
         'subtitles':        []
     }
 }
