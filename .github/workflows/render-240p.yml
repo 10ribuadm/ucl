@@ -40,6 +40,7 @@ jobs:
 
       - name: "📦 Install Dependencies"
         run: |
+          sudo apt-get install -y --no-install-recommends ffmpeg libcurl4-openssl-dev
           python -m pip install --upgrade pip
           pip install --no-cache-dir yt-dlp pytubefix cloudscraper requests curl_cffi
 
