@@ -138,6 +138,7 @@ fmt = f'bv*[height<={height}]+ba/bv*[height<={height}]+ba[language=id]/bv*+ba/b[
 lang_args = ['--extractor-args', 'youtube:lang=id', '--add-header', 'Accept-Language:id-ID,id;q=0.9,en;q=0.8']
 
 STRATEGIES = [
+    ['yt-dlp', '--extractor-args', 'youtube:player_client=android', '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4', '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
     ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr;lang=id',
      '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
      '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
