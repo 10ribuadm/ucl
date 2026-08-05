@@ -16,7 +16,7 @@ on:
 jobs:
   render_1080p:
     name: "⚡ 1080p Full HD Worker"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     timeout-minutes: 360
 
     steps:
