@@ -16,7 +16,7 @@ on:
 jobs:
   render_360p:
     name: "⚡ 360p Standard Worker"
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-latest]
     timeout-minutes: 90
 
     steps:
