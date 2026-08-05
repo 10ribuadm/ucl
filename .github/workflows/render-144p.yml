@@ -1,4 +1,4 @@
-name: "🎬 HayukTube Render v2 — 144p Ultra Low"
+name: "🎬 HayukTube Render v2 — 144p"
 
 on:
   repository_dispatch:
@@ -9,40 +9,18 @@ on:
         description: 'YouTube URL to Download & Render (144p)'
         required: true
       category:
-        description: 'Category (MUSIC, VIRAL, GENERAL, GAMING, HIBURAN)'
+        description: 'Category'
         required: false
         default: 'General'
 
 jobs:
   render_144p:
-    name: "⚡ 144p Ultra Low Worker"
+    name: "⚡ 144p Worker"
     runs-on: self-hosted
-    timeout-minutes: 60
 
     steps:
       - name: "📥 Checkout Repository"
         uses: actions/checkout@v4
-
-      - name: "⚙️ Setup Python 3.11"
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: "🛡️ Setup Cloudflare WARP (Bypass Datacenter IP Block)"
-        uses: fscarmen/warp-on-actions@main
-
-      - name: "🦕 Install Deno Runtime (yt-dlp JS Solver)"
-        run: |
-          curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.deno/bin:$PATH"
-          deno --version
-
-      - name: "📦 Install Dependencies"
-        run: |
-          sudo apt-get install -y --no-install-recommends ffmpeg libcurl4-openssl-dev
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir yt-dlp pytubefix cloudscraper requests curl_cffi
 
       - name: "🚀 Render 144p & Upload to Telegram Cloud Vault"
         env:
@@ -54,6 +32,5 @@ jobs:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
           QUALITY:       "144p"
         run: |
-          export PATH="$HOME/.deno/bin:$PATH"
           echo "🎯 Quality: 144p | URL: $TARGET_URL"
           python3 render_script_v2.py
