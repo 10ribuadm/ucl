@@ -16,7 +16,7 @@ on:
 jobs:
   cloud_render:
     name: ⚡ 1Gbps High-Speed Cloud Renderer
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: self-hosted
     timeout-minutes: 360
 
     steps:
