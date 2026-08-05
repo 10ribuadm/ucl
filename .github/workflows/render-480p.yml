@@ -16,7 +16,7 @@ on:
 jobs:
   render_480p:
     name: "⚡ 480p SD Worker"
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: self-hosted
     timeout-minutes: 120
 
     steps:
