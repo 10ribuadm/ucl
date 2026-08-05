@@ -155,22 +155,6 @@ STRATEGIES = [
     ['yt-dlp', '--js-runtimes', 'deno', '--remote-components', 'ejs:github', '--extractor-args', 'youtube:player_client=ios,android',
      '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
      '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url]
-] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv_embedded,android_vr;lang=id',
-     '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=tv;lang=id',
-     '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=ios,mweb;lang=id',
-     '-f', fmt, '--format-sort', f'res:{height},fps', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
-
-    ['yt-dlp', '--js-runtimes', 'deno', '--extractor-args', 'youtube:player_client=web;lang=id',
-     '-f', 'bv*+ba/best', '--merge-output-format', 'mp4',
-     '--no-playlist', '--no-check-certificates'] + lang_args + cookie_args + ['-o', '/tmp/video.%(ext)s', url],
 ]
 
 video_path = None
