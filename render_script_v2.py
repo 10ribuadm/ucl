@@ -108,21 +108,21 @@ log_progress('downloading', 25, f'Mengunduh stream video [{quality}] ({title[:40
 
 # ─── COOKIES ─────────────────────────────────────────────────────────────────
 cookies_path = None
-if yt_cookies and len(yt_cookies) > 50:
+if os.path.exists('/etc/yt_cookies.txt') and os.path.getsize('/etc/yt_cookies.txt') > 50:
+    cookies_path = '/etc/yt_cookies.txt'
+    print(f'🍪 System Cookies loaded from /etc/yt_cookies.txt ({os.path.getsize(cookies_path)} bytes)')
+elif os.path.exists('/root/yt_cookies.txt') and os.path.getsize('/root/yt_cookies.txt') > 50:
+    cookies_path = '/root/yt_cookies.txt'
+    print(f'🍪 System Cookies loaded from /root/yt_cookies.txt ({os.path.getsize(cookies_path)} bytes)')
+elif yt_cookies and len(yt_cookies) > 50:
     cookies_path = '/tmp/yt_cookies.txt'
     with open(cookies_path, 'w') as cf:
         cf.write(yt_cookies)
-    print(f'🍪 Cookies loaded ({len(yt_cookies)} bytes)')
-elif os.path.exists('yt_cookies.txt'):
-    cookies_path = 'yt_cookies.txt'
-    print(f'🍪 Local Cookies loaded ({os.path.getsize(cookies_path)} bytes)')
-elif os.path.exists('/tmp/yt_cookies.txt'):
-    cookies_path = '/tmp/yt_cookies.txt'
-    print(f'🍪 Temp Cookies loaded ({os.path.getsize(cookies_path)} bytes)')
+    print(f'🍪 Secret Cookies loaded ({len(yt_cookies)} bytes)')
 else:
-    print('⚠️  No YOUTUBE_COOKIES — some videos may fail')
+    print('⚠️  No YOUTUBE_COOKIES found — some videos may fail')
 
-cookie_args = ['--cookies', cookies_path, '--remote-components', 'ejs:github'] if cookies_path else ['--remote-components', 'ejs:github'] if cookies_path else []
+cookie_args = ['--cookies', cookies_path] if cookies_path else [] if cookies_path else ['--remote-components', 'ejs:github'] if cookies_path else []
 
 # ─── DOWNLOAD: yt-dlp (best format for target quality) ───────────────────────
 def clean_tmp():
