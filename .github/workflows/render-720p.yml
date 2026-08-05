@@ -16,7 +16,7 @@ on:
 jobs:
   render_720p:
     name: "⚡ 720p HD Worker"
-    runs-on: [self-hosted, ubuntu-latest]
+    runs-on: self-hosted
     timeout-minutes: 180
 
     steps:
