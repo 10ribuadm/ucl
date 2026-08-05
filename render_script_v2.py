@@ -113,10 +113,16 @@ if yt_cookies and len(yt_cookies) > 50:
     with open(cookies_path, 'w') as cf:
         cf.write(yt_cookies)
     print(f'🍪 Cookies loaded ({len(yt_cookies)} bytes)')
+elif os.path.exists('yt_cookies.txt'):
+    cookies_path = 'yt_cookies.txt'
+    print(f'🍪 Local Cookies loaded ({os.path.getsize(cookies_path)} bytes)')
+elif os.path.exists('/tmp/yt_cookies.txt'):
+    cookies_path = '/tmp/yt_cookies.txt'
+    print(f'🍪 Temp Cookies loaded ({os.path.getsize(cookies_path)} bytes)')
 else:
     print('⚠️  No YOUTUBE_COOKIES — some videos may fail')
 
-cookie_args = ['--cookies', cookies_path] if cookies_path else []
+cookie_args = ['--cookies', cookies_path, '--remote-components', 'ejs:github'] if cookies_path else ['--remote-components', 'ejs:github'] if cookies_path else []
 
 # ─── DOWNLOAD: yt-dlp (best format for target quality) ───────────────────────
 def clean_tmp():
